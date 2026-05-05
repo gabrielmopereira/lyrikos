@@ -33,8 +33,8 @@ pnpm db:seed                      # seed database
 
 ### Apps
 
-| App   | Framework                | Dev URL                      | Purpose                   |
-| ----- | ------------------------ | ---------------------------- | ------------------------- |
+| App   | Framework                | Dev URL                         | Purpose                   |
+| ----- | ------------------------ | ------------------------------- | ------------------------- |
 | `web` | Next.js 16 (App Router)  | `https://lyrikos.web.localhost` | Main application          |
 | `api` | Hono on Node.js (tsdown) | `https://lyrikos.api.localhost` | Backend API + auth server |
 
@@ -71,8 +71,8 @@ The proxy auto-restarts on subsequent invocations once trusted.
 
 ### URLs
 
-| Service | URL                          | Started by |
-| ------- | ---------------------------- | ---------- |
+| Service | URL                             | Started by |
+| ------- | ------------------------------- | ---------- |
 | `web`   | `https://lyrikos.web.localhost` | `pnpm dev` |
 | `api`   | `https://lyrikos.api.localhost` | `pnpm dev` |
 

@@ -16,8 +16,8 @@ AI-powered lyrics translation service.
 
 ## Apps
 
-| App   | Description      | Dev URL                      |
-| ----- | ---------------- | ---------------------------- |
+| App   | Description      | Dev URL                         |
+| ----- | ---------------- | ------------------------------- |
 | `web` | Main application | `https://lyrikos.web.localhost` |
 | `api` | Hono backend API | `https://lyrikos.api.localhost` |
 
