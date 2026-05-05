@@ -1,0 +1,25 @@
+name: lyrikos
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: lyrikos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lyrikos
+      POSTGRES_PASSWORD: lyrikos
+      POSTGRES_DB: lyrikos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lyrikos -d lyrikos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
