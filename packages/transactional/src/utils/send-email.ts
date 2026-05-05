@@ -5,10 +5,10 @@ import { z } from "zod";
 import { createResendClient } from "../client";
 
 const emailConfigSchema = z.object({
-  bcc: z.union([z.string().email(), z.array(z.string().email())]).optional(),
-  cc: z.union([z.string().email(), z.array(z.string().email())]).optional(),
-  from: z.string().email().default("lyrikos <noreply@lyrikos.example.com>"),
-  replyTo: z.string().email().optional(),
+  bcc: z.union([z.email(), z.array(z.email())]).optional(),
+  cc: z.union([z.email(), z.array(z.email())]).optional(),
+  from: z.email().default("lyrikos <noreply@lyrikos.example.com>"),
+  replyTo: z.email().optional(),
   subject: z.string(),
   tags: z
     .array(
@@ -18,7 +18,7 @@ const emailConfigSchema = z.object({
       }),
     )
     .optional(),
-  to: z.union([z.string().email(), z.array(z.string().email())]),
+  to: z.union([z.email(), z.array(z.email())]),
 });
 
 type EmailConfig = z.infer<typeof emailConfigSchema>;
