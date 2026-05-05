@@ -19,21 +19,21 @@ const SignUpAttemptEmail = ({
 }: SignUpAttemptEmailProps) => {
   return (
     <BaseLayout preview="A sign-up attempt was made with your lyrikos account email">
-      <Heading className="mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance break-words text-foreground">
+      <Heading className="wrap-break-words mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance text-foreground">
         Did you try to sign up?
       </Heading>
 
-      <Text className="m-0 mb-2 text-base text-pretty break-words text-muted-foreground">
+      <Text className="wrap-break-words m-0 mb-2 text-base text-pretty text-muted-foreground">
         Hi{username ? ` ${username}` : ""},
       </Text>
 
-      <Text className="m-0 mb-2 text-base text-pretty break-words text-muted-foreground">
+      <Text className="wrap-break-words m-0 mb-2 text-base text-pretty text-muted-foreground">
         Someone just tried to create a new lyrikos account using your email (
         <strong>{userEmail}</strong>). You already have an account with us, so we didn&apos;t create
         a new one.
       </Text>
 
-      <Text className="m-0 mb-6 text-base text-pretty break-words text-muted-foreground">
+      <Text className="wrap-break-words m-0 mb-6 text-base text-pretty text-muted-foreground">
         If this was you, sign in to your existing account below. If you forgot your password, you
         can reset it.
       </Text>

@@ -9,7 +9,7 @@ type ButtonProps = {
 
 const Button = ({ children, fullWidth = false, href, variant = "primary" }: ButtonProps) => {
   const baseClasses =
-    "box-border rounded-lg px-5 py-3 text-center text-base font-semibold no-underline break-words whitespace-normal";
+    "box-border rounded-lg px-5 py-3 text-center text-base font-semibold no-underline wrap-break-words whitespace-normal";
 
   const variantClasses = {
     outline: "border border-border bg-card text-foreground",

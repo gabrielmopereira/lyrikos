@@ -28,7 +28,7 @@ const BaseLayout = ({
         </Head>
         <Preview>{preview}</Preview>
         <Body className="m-0 bg-muted p-4 font-sans">
-          <Container className="mx-auto w-full max-w-[600px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <Container className="mx-auto w-full max-w-150 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             {/* Header */}
             <Section className="bg-primary px-6 py-8 text-center">
               <Link className="inline-block no-underline" href="https://lyrikos.example.com">
@@ -38,7 +38,7 @@ const BaseLayout = ({
 
             {/* Content */}
             <Section className="px-6 py-8">
-              <div className="break-words">{children}</div>
+              <div className="wrap-break-words">{children}</div>
             </Section>
 
             {/* Footer */}

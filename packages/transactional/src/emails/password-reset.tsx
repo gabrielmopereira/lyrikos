@@ -21,17 +21,17 @@ const PasswordResetEmail = ({
 }: PasswordResetEmailProps) => {
   return (
     <BaseLayout preview="Reset your lyrikos password">
-      <Heading className="mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance break-words text-foreground">
+      <Heading className="wrap-break-words mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance text-foreground">
         Reset your password
       </Heading>
 
-      <Text className="m-0 mb-2 text-base text-pretty break-words text-muted-foreground">
+      <Text className="wrap-break-words m-0 mb-2 text-base text-pretty text-muted-foreground">
         Hi{username ? ` ${username}` : ""},
       </Text>
 
-      <Text className="m-0 mb-6 text-base text-pretty break-words text-muted-foreground">
-        We received a request to reset the password on your lyrikos account. If you made this request,
-        use the button below to set a new password.
+      <Text className="wrap-break-words m-0 mb-6 text-base text-pretty text-muted-foreground">
+        We received a request to reset the password on your lyrikos account. If you made this
+        request, use the button below to set a new password.
       </Text>
 
       <div className="mb-6">

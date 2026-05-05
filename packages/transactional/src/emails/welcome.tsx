@@ -13,11 +13,11 @@ type WelcomeEmailProps = {
 const WelcomeEmail = ({ userEmail, username, verificationUrl }: WelcomeEmailProps) => {
   return (
     <BaseLayout preview="Welcome to lyrikos. Verify your email to get started.">
-      <Heading className="mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance break-words text-foreground">
+      <Heading className="wrap-break-words mt-0 mb-4 text-2xl font-semibold tracking-tight text-balance text-foreground">
         Welcome to lyrikos.
       </Heading>
 
-      <Text className="m-0 mb-6 text-base text-pretty break-words text-muted-foreground">
+      <Text className="wrap-break-words m-0 mb-6 text-base text-pretty text-muted-foreground">
         Glad to have you here. Verify your email to finish setting up your account.
       </Text>
 
