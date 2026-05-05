@@ -1,5 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { Scalar } from "@scalar/hono-api-reference";
+import { Scalar as scalar } from "@scalar/hono-api-reference";
 
 const createOpenAPIApp = <V extends Record<string, unknown> = Record<string, never>>() => {
   const app = new OpenAPIHono<{ Variables: V }>();
@@ -25,9 +25,7 @@ const createOpenAPIApp = <V extends Record<string, unknown> = Record<string, nev
     ],
   });
 
-  // Scalar() is a factory from @scalar/hono-api-reference, not a constructor.
-  // oxlint-disable-next-line new-cap
-  app.get("/docs", Scalar({ url: "/openapi.json" }));
+  app.get("/docs", scalar({ url: "/openapi.json" }));
 
   return app;
 };
