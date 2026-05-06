@@ -2,6 +2,7 @@
 
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
+import type { Ref } from "react";
 import { useRef } from "react";
 
 import { cn } from "../lib/utils";
@@ -43,7 +44,8 @@ const ComboboxClear = ({ className, ...props }: ComboboxPrimitive.Clear.Props) =
   );
 };
 
-type ComboboxInputProps = ComboboxPrimitive.Input.Props & {
+type ComboboxInputProps = Omit<ComboboxPrimitive.Input.Props, "ref"> & {
+  ref: Ref<HTMLDivElement | null>;
   showClear?: boolean;
   showTrigger?: boolean;
 };
@@ -52,13 +54,15 @@ const ComboboxInput = ({
   children,
   className,
   disabled = false,
+  ref,
   showClear = false,
   showTrigger = true,
   ...props
 }: ComboboxInputProps) => {
   return (
-    <InputGroup className={cn("w-auto", className)}>
+    <InputGroup className={cn("w-auto", className)} ref={ref}>
       <ComboboxPrimitive.Input render={<InputGroupInput disabled={disabled} />} {...props} />
+
       <InputGroupAddon align="inline-end">
         {showTrigger && (
           <InputGroupButton
@@ -70,8 +74,10 @@ const ComboboxInput = ({
             variant="ghost"
           />
         )}
+
         {showClear && <ComboboxClear disabled={disabled} />}
       </InputGroupAddon>
+
       {children}
     </InputGroup>
   );
