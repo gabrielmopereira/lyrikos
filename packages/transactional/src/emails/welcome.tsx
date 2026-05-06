@@ -1,6 +1,7 @@
 import { Heading, Link, Text } from "react-email";
 
-import { Button, Divider } from "../components";
+import { Button } from "../components/button";
+import { Divider } from "../components/divider";
 
 import { BaseLayout } from "./base-layout";
 
@@ -60,5 +61,4 @@ const WelcomeEmail = ({ userEmail, username, verificationUrl }: WelcomeEmailProp
 };
 
 export { WelcomeEmail };
-// fallow-ignore-next-line unused-export
 export default WelcomeEmail;
