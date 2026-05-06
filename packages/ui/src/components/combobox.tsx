@@ -45,7 +45,7 @@ const ComboboxClear = ({ className, ...props }: ComboboxPrimitive.Clear.Props) =
 };
 
 type ComboboxInputProps = Omit<ComboboxPrimitive.Input.Props, "ref"> & {
-  ref: Ref<HTMLDivElement | null>;
+  ref?: Ref<HTMLDivElement | null>;
   showClear?: boolean;
   showTrigger?: boolean;
 };
