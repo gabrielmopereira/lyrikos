@@ -103,6 +103,7 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
           />
         </>
       )}
+
       <head>
         {/* Additional meta tags */}
         <meta content="telephone=no" name="format-detection" />
@@ -113,6 +114,7 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
         <meta content="DENY" httpEquiv="X-Frame-Options" />
         <meta content="1; mode=block" httpEquiv="X-XSS-Protection" />
       </head>
+
       <body className={inter.className} suppressHydrationWarning>
         {children}
       </body>
