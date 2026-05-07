@@ -34,8 +34,12 @@ const updateUserSchema = z
 
 const errorSchema = z
   .object({
-    code: z.string().optional(),
-    error: z.string(),
+    error: z.object({
+      code: z.string(),
+      details: z.array(z.object({ field: z.string(), message: z.string() })).optional(),
+      message: z.string(),
+      stack: z.string().optional(),
+    }),
   })
   .openapi("Error");
 
