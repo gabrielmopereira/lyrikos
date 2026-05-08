@@ -116,7 +116,11 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
       </head>
 
       <body className={inter.className} suppressHydrationWarning>
-        {children}
+        <div className="relative text-foreground">
+          <div className="cella-bg" />
+
+          <div className="relative z-10">{children}</div>
+        </div>
       </body>
     </html>
   );

@@ -54,7 +54,7 @@ const Header = () => {
 
   return (
     <header className="flex w-full items-center justify-between p-4">
-      <h1 className="text-2xl">lyrikos</h1>
+      <h1 className="font-serif text-2xl">Lyrikos</h1>
 
       <Combobox
         filter={null}

@@ -9,7 +9,7 @@ const metadata: Metadata = {
 
 const Page = () => {
   return (
-    <div>
+    <div className="min-h-dvh">
       <Header />
     </div>
   );
