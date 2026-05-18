@@ -19,6 +19,7 @@ import {
   standardRateLimit,
 } from "./middleware/security";
 import { v1SearchRoutes } from "./routes/v1/search";
+import { v1TrackRoutes } from "./routes/v1/track";
 import { v1UserRoutes } from "./routes/v1/users";
 
 const app = createOpenAPIApp();
@@ -144,6 +145,7 @@ app.openapi(readyzRoute, async (c) => {
 
 app.route("/api/v1/users", v1UserRoutes);
 app.route("/api/v1/search", v1SearchRoutes);
+app.route("/api/v1/track", v1TrackRoutes);
 
 const openApiContent = app.getOpenAPI31Document({
   info: { title: "lyrikos API", version: "v1" },
