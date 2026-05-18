@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const trackSchema = z.object({
+const searchTrack = z.object({
   albumCover: z.url(),
   albumName: z.string(),
   artistName: z.string(),
@@ -9,14 +9,27 @@ const trackSchema = z.object({
   explicitLyrics: z.boolean(),
   title: z.string(),
 });
+type SearchTrack = z.infer<typeof searchTrack>;
 
 const searchResponseSchema = z.object({
-  data: z.array(trackSchema),
+  data: z.array(searchTrack),
   total: z.number(),
 });
-
-type Track = z.infer<typeof trackSchema>;
 type SearchResponse = z.infer<typeof searchResponseSchema>;
+
+const trackSchema = z.object({
+  albumCover: z.url(),
+  albumName: z.string(),
+  artistId: z.string(),
+  artistName: z.string(),
+  duration: z.number(),
+  explicitLyrics: z.boolean(),
+  id: z.string(),
+  isrc: z.string(),
+  shortTitle: z.string(),
+  title: z.string(),
+});
+type Track = z.infer<typeof trackSchema>;
 
 const getApiUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_API_URL;
@@ -47,5 +60,23 @@ const searchTracks = async (
   return searchResponseSchema.parse(data);
 };
 
-export type { Track, SearchResponse };
-export { searchTracks };
+const getTrack = async (id: string, init?: { signal?: AbortSignal }): Promise<Track | null> => {
+  const response = await fetch(`${getApiUrl()}/api/v1/track/${encodeURIComponent(id)}`, {
+    cache: "no-store",
+    signal: init?.signal,
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Track request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return trackSchema.parse(data);
+};
+
+export type { SearchTrack, SearchResponse, Track };
+export { searchTracks, getTrack };

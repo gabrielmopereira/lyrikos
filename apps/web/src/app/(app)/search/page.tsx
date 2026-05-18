@@ -46,11 +46,7 @@ const Page = async ({ searchParams }: Props) => {
       <Card className="min-h-0 flex-1">
         <CardHeader className="flex h-max" data-divider>
           <CardTitle>Tracks</CardTitle>
-          <CardDescription>
-            1-20 of {result?.total}
-            <span className="px-2">&bull;</span>
-            Sorted by relevance
-          </CardDescription>
+          <CardDescription>1-20 of {result?.total} · Sorted by relevance</CardDescription>
         </CardHeader>
 
         <CardContent data-flush data-scroll>

@@ -94,7 +94,7 @@ const Header = () => {
             {results.map((item) => (
               <ComboboxItem
                 key={item.deezerId}
-                render={<Link href={`/songs/${item.deezerId}`} />}
+                render={<Link href={`/track/${item.deezerId}`} />}
                 value={item}
               >
                 <div

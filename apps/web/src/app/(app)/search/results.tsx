@@ -35,7 +35,7 @@ const SearchResults = ({ query, result }: Props) => {
     <>
       {result.data.map((track) => (
         <li className="border-border not-last:border-b" key={track.deezerId}>
-          <Link className="flex items-center gap-4 px-7 py-3" href={`/songs/${track.deezerId}`}>
+          <Link className="flex items-center gap-4 px-7 py-3" href={`/track/${track.deezerId}`}>
             <Image
               alt={track.albumName}
               className="shrink-0 rounded-tile"
@@ -59,7 +59,7 @@ const SearchResults = ({ query, result }: Props) => {
                 {track.explicitLyrics && (
                   <>
                     <span className="text-secondary">Explicit</span>
-                    <span className="px-1">&bull;</span>
+                    <span> · </span>
                   </>
                 )}
                 <span className="tabular-nums">{formatDuration(track.duration)}</span>
