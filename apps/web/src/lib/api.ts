@@ -31,6 +31,22 @@ const trackSchema = z.object({
 });
 type Track = z.infer<typeof trackSchema>;
 
+const lyricsStatusSchema = z.enum([
+  "PENDING",
+  "AVAILABLE",
+  "INSTRUMENTAL",
+  "NOT_FOUND",
+  "FETCH_FAILED",
+]);
+type LyricsStatus = z.infer<typeof lyricsStatusSchema>;
+
+const trackLyricsSchema = z.object({
+  plainLyrics: z.string().nullable(),
+  status: lyricsStatusSchema,
+  syncedLyrics: z.string().nullable(),
+});
+type TrackLyrics = z.infer<typeof trackLyricsSchema>;
+
 const getApiUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_API_URL;
 
@@ -78,5 +94,26 @@ const getTrack = async (id: string, init?: { signal?: AbortSignal }): Promise<Tr
   return trackSchema.parse(data);
 };
 
-export type { SearchTrack, SearchResponse, Track };
-export { searchTracks, getTrack };
+const getTrackLyrics = async (
+  id: string,
+  init?: { signal?: AbortSignal },
+): Promise<TrackLyrics | null> => {
+  const response = await fetch(`${getApiUrl()}/api/v1/track/${encodeURIComponent(id)}/lyrics`, {
+    cache: "no-store",
+    signal: init?.signal,
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Lyrics request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return trackLyricsSchema.parse(data);
+};
+
+export type { SearchTrack, SearchResponse, Track, TrackLyrics, LyricsStatus };
+export { searchTracks, getTrack, getTrackLyrics };

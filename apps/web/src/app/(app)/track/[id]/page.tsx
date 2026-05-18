@@ -3,9 +3,43 @@ import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
-import { getTrack } from "@/lib/api";
+import { getTrack, getTrackLyrics, type LyricsStatus, type TrackLyrics } from "@/lib/api";
 
 import LyricsViewer, { type LyricLine } from "./_components/lyrics-viewer";
+
+const LRC_LINE_REGEX = /^\[(\d+):(\d+)(?:[.:]\d+)?\](.*)$/v;
+
+const parseSyncedLyrics = (synced: string): Array<LyricLine> =>
+  synced
+    .split("\n")
+    .map((raw): LyricLine | null => {
+      const match = LRC_LINE_REGEX.exec(raw);
+      if (!match) {
+        return null;
+      }
+      const [, minutes, seconds, text] = match;
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return null;
+      }
+      return {
+        original: trimmed,
+        time: `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`,
+        translation: "",
+      };
+    })
+    .filter((line): line is LyricLine => line !== null);
+
+const LYRICS_FALLBACK_MESSAGES: Record<LyricsStatus, string> = {
+  AVAILABLE: "Lyrics are available but couldn't be displayed.",
+  FETCH_FAILED: "Couldn't fetch lyrics — try again later.",
+  INSTRUMENTAL: "This track is instrumental.",
+  NOT_FOUND: "No lyrics found for this track yet.",
+  PENDING: "Lyrics are being fetched…",
+};
+
+const lyricsFallbackMessage = (lyrics: TrackLyrics | null): string =>
+  lyrics ? LYRICS_FALLBACK_MESSAGES[lyrics.status] : "Lyrics are not available for this track yet.";
 
 // TODO: save user preference for lyrics display
 // TODO: Add share button
@@ -21,44 +55,6 @@ const formatDuration = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const lines: Array<LyricLine> = [
-  { original: "Stay all weekend", time: "0:18", translation: "Μείνε όλο το σαββατοκύριακο" },
-  {
-    note: "Greek τηγανίτες are closer to crêpes than US pancakes — a soft mistranslation chosen for cultural resonance.",
-    original: "We'll get pancakes",
-    time: "0:24",
-    translation: "Θα φτιάξουμε τηγανίτες",
-  },
-  { original: "I'll buy an old van", time: "0:31", translation: "Θα αγοράσω ένα παλιό φορτηγάκι" },
-  {
-    original: "We'll drive to the canyon",
-    time: "0:38",
-    translation: "Θα οδηγήσουμε μέχρι το φαράγγι",
-  },
-  {
-    note: "'Down to Mexico' — directional 'down' doesn't carry a geographic sense in Greek, so it lands as 'all the way down.'",
-    original: "And maybe down to Mexico",
-    time: "0:46",
-    translation: "Και ίσως μέχρι κάτω στο Μεξικό",
-  },
-  { original: "Quiet company", time: "0:54", translation: "Σιωπηλή συντροφιά" },
-  { original: "Nothing said", time: "1:02", translation: "Τίποτα ειπωμένο" },
-  { original: "We've got time", time: "1:09", translation: "Έχουμε χρόνο" },
-  {
-    original: "And the static on the radio",
-    time: "1:18",
-    translation: "Και ο στατικός θόρυβος στο ραδιόφωνο",
-  },
-  {
-    original: "Will keep us company tonight",
-    time: "1:26",
-    translation: "Θα μας κρατάει συντροφιά απόψε",
-  },
-  { original: "Just stay another day", time: "1:34", translation: "Απλά μείνε άλλη μια μέρα" },
-  { original: "And we'll find a way", time: "1:42", translation: "Και θα βρούμε τρόπο" },
-  { original: "To leave it all behind", time: "1:50", translation: "Να αφήσουμε τα πάντα πίσω" },
-];
-
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -70,6 +66,12 @@ const TrackPage = async ({ params }: Props) => {
   if (!track) {
     notFound();
   }
+
+  const lyrics = await getTrackLyrics(id);
+  const lines: Array<LyricLine> =
+    lyrics?.status === "AVAILABLE" && lyrics.syncedLyrics
+      ? parseSyncedLyrics(lyrics.syncedLyrics)
+      : [];
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-8 p-8">
@@ -111,13 +113,19 @@ const TrackPage = async ({ params }: Props) => {
         </Card>
       </header>
 
-      <Card className="min-h-0">
-        <LyricsViewer
-          lines={lines}
-          sourceLabel={language.source.label}
-          targetLabel={language.target.label}
-        />
-      </Card>
+      {lines.length > 0 ? (
+        <Card className="min-h-0">
+          <LyricsViewer
+            lines={lines}
+            sourceLabel={language.source.label}
+            targetLabel={language.target.label}
+          />
+        </Card>
+      ) : (
+        <Card className="min-h-0 p-8 text-center font-mono text-xs tracking-widest text-marble-dim uppercase">
+          {lyricsFallbackMessage(lyrics)}
+        </Card>
+      )}
     </main>
   );
 };
