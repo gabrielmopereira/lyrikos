@@ -12,6 +12,7 @@ const cardVariants = cva(
         lg: "rounded-[calc(var(--radius-card)+4px)]",
         md: "rounded-card",
         sm: "rounded-[18px]",
+        xs: "rounded-2xl",
       },
       tone: {
         darkGlass:
@@ -26,7 +27,7 @@ const cardVariants = cva(
 );
 
 type CardProps = ComponentProps<"div"> & {
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   tone?: "darkGlass" | "ghost" | "glass" | "muted";
 };
 
@@ -75,7 +76,7 @@ const CardAction = ({ className, ...props }: ComponentProps<"div">) => (
 const CardContent = ({ className, ...props }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "px-7 pb-5 data-flush:px-0 data-flush:pb-0 data-scroll:flex-1 data-scroll:overflow-y-scroll",
+      "px-7 pb-5 data-flush:px-0 data-flush:pb-0 data-scroll:min-h-0 data-scroll:flex-1 data-scroll:overflow-y-scroll",
       className,
     )}
     data-slot="card-content"
