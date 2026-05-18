@@ -32,10 +32,9 @@ const mockDeezerTrack = {
     picture_xl: "https://example.com/xl.jpg",
   },
   duration: 180,
-  explicit_content_cover: 0,
-  explicit_content_lyrics: 0,
   explicit_lyrics: false,
   id: 1,
+  isrc: "USRC17607839",
   readable: true,
   title: "Test Track",
   title_short: "Test Track",
@@ -46,12 +45,8 @@ const mockDeezerSearchResponse = {
   total: 1,
 };
 
-const createMockResponse = (body: unknown, { ok = true, status = 200 } = {}) =>
-  ({
-    json: () => body,
-    ok,
-    status,
-  }) as Response;
+const createMockResponse = (body: unknown, { status = 200 }: { status?: number } = {}) =>
+  new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
 
 describe("DeezerService", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -98,8 +93,8 @@ describe("DeezerService", () => {
     });
 
     it("should throw AppError 502 when upstream is not ok", async () => {
-      fetchMock.mockResolvedValue(
-        createMockResponse({ error: "upstream error" }, { ok: false, status: 503 }),
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(createMockResponse({ error: "upstream error" }, { status: 503 })),
       );
 
       await expect(deezerService.search("brutalismus")).rejects.toThrow(AppError);
