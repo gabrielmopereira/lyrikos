@@ -7,22 +7,210 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+enum LyricsStatus {
+  PENDING
+  AVAILABLE
+  INSTRUMENTAL
+  NOT_FOUND
+  FETCH_FAILED
+}
+
+enum TranslationStatus {
+  FRESH
+  STALE_MODEL
+  STALE_RESEARCH
+  STALE_SOURCE
+  FLAGGED
+}
+
+enum FeedbackKind {
+  CONTEXT
+  CORRECTION
+  NOTE
+  QUESTION
+}
+
+enum FeedbackStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  INTEGRATED
+}
+
+model Track {
+  id String @id @unique // derived from Deezer's track ID
+
+  title          String
+  shortTitle     String
+  albumName      String
+  albumId        String
+  artistName     String
+  artistId       String
+  albumCover     String
+  duration       Int
+  explicitLyrics Boolean
+  isrc           String
+
+  lyrics       Lyrics?
+  translations Translation[]
+  contexts     TrackContext[]
+  feedback     TranslationFeedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([createdAt])
+}
+
+model Lyrics {
+  id String @id @default(cuid())
+
+  trackId String @unique
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  status LyricsStatus @default(PENDING)
+
+  language     String?
+  plainLyrics  String? @db.Text
+  syncedLyrics String? @db.Text
+  contentHash  String?
+
+  lastAttemptAt DateTime?
+  attemptCount  Int       @default(0)
+  fetchedAt     DateTime?
+  errorMessage  String?
+
+  research LyricsResearch?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model LyricsResearch {
+  id       String @id @default(cuid())
+  lyricsId String @unique
+  lyrics   Lyrics @relation(fields: [lyricsId], references: [id], onDelete: Cascade)
+
+  notes   Json
+  summary String @db.Text
+
+  modelId           String
+  promptVersion     String
+  sourceContentHash String
+
+  generatedAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TrackContext {
+  id       String  @id @default(cuid())
+  trackId  String
+  track    Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  language String?
+
+  body String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([trackId, language])
+}
+
+model Translation {
+  id      String @id @default(cuid())
+  trackId String
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  language String
+
+  segments       Json
+  translatorNote String? @db.Text
+
+  modelId           String
+  promptVersion     String
+  sourceContentHash String
+  researchVersion   String
+
+  status    TranslationStatus @default(FRESH)
+  selfScore Float?
+  upvotes   Int               @default(0)
+  downvotes Int               @default(0)
+
+  votes TranslationVote[]
+
+  generatedAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([trackId, language])
+  @@index([language])
+  @@index([status])
+}
+
+model TranslationFeedback {
+  id           String  @id @default(cuid())
+  trackId      String
+  track        Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  language     String?
+  segmentIndex Int?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  kind FeedbackKind
+  body String       @db.Text
+
+  status     FeedbackStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([trackId, language, status])
+  @@index([userId])
+}
+
+model TranslationVote {
+  id            String      @id @default(cuid())
+  translationId String
+  translation   Translation @relation(fields: [translationId], references: [id], onDelete: Cascade)
+
+  voterKey String
+  userId   String?
+  user     User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  value Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([translationId, voterKey])
+  @@index([translationId])
+}
+
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   name          String?
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Custom fields
-  username        String?   @unique
-  displayUsername String?   @unique
+  username        String? @unique
+  displayUsername String? @unique
   displayName     String?
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
+
+  feedback         TranslationFeedback[]
+  translationVotes TranslationVote[]
 
   @@index([email])
 }
@@ -44,11 +232,11 @@ model Session {
 }
 
 model Account {
-  id           String @id @default(cuid())
-  accountId    String
-  providerId   String
-  userId       String
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String @id @default(cuid())
+  accountId  String
+  providerId String
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   accessToken  String? @db.Text
   refreshToken String? @db.Text
