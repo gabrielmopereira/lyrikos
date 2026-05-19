@@ -14,9 +14,11 @@ const generateTextMock = vi.fn();
 const noObjectIsInstanceMock = vi.fn();
 
 vi.mock("ai", () => ({
+  APICallError: { isInstance: () => false },
   generateText: (...args: Array<unknown>) => generateTextMock(...args),
   NoObjectGeneratedError: { isInstance: (e: unknown) => noObjectIsInstanceMock(e) },
   Output: { object: vi.fn(() => ({})) },
+  RetryError: { isInstance: () => false },
   stepCountIs: vi.fn(() => ({})),
 }));
 

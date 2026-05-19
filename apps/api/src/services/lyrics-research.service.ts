@@ -1,8 +1,9 @@
 import { google } from "@ai-sdk/google";
 import { prisma } from "@repo/db";
 import type { Lyrics, LyricsResearch, Prisma } from "@repo/db";
-import { NoObjectGeneratedError, Output, generateText, stepCountIs } from "ai";
+import { Output, generateText, stepCountIs } from "ai";
 
+import { describeAiError } from "@/lib/ai-errors";
 import { logger } from "@/lib/logger";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
 import {
@@ -82,16 +83,17 @@ export class LyricsResearchService {
 
       notes = output;
     } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error)) {
+      const info = describeAiError(error);
+
+      if (info.kind === "schema") {
         logger.error(
-          { cause: error.cause, lyricsId: lyrics.id, text: error.text },
+          { ...info, lyricsId: lyrics.id },
           "AI returned an output that did not match the research schema",
         );
-
         throw new AppError("Failed to parse research output", 502, true, "RESEARCH_PARSE_ERROR");
       }
 
-      logger.error({ error, lyricsId: lyrics.id }, "Lyrics research AI call failed");
+      logger.error({ ...info, lyricsId: lyrics.id }, "Lyrics research AI call failed");
       throw new AppError("Lyrics research failed", 502, true, "RESEARCH_UPSTREAM_ERROR");
     }
 
