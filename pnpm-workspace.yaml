@@ -2,6 +2,15 @@ packages:
   - apps/*
   - packages/*
 
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  fallow: true
+  msw: true
+  prisma: true
+  sharp: true
+  vue-demi: true
+
 nodeLinker: hoisted
 
 onlyBuiltDependencies:
