@@ -8,9 +8,9 @@ const trackSchema = z
     albumCover: z.url(),
     albumName: z.string(),
     artistName: z.string(),
-    deezerId: z.string(),
     duration: z.number(),
     explicitLyrics: z.boolean(),
+    id: z.string(),
     title: z.string(),
   })
   .openapi("Track");
@@ -53,9 +53,9 @@ const deezerToTrack = (deezerSearchTrack: DeezerSearchTrack): Track => ({
   albumCover: deezerSearchTrack.album.cover_medium,
   albumName: deezerSearchTrack.album.title,
   artistName: deezerSearchTrack.artist.name,
-  deezerId: String(deezerSearchTrack.id),
   duration: deezerSearchTrack.duration,
   explicitLyrics: deezerSearchTrack.explicit_lyrics,
+  id: String(deezerSearchTrack.id),
   title: deezerSearchTrack.title,
 });
 

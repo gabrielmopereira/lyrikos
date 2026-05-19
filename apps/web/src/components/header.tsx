@@ -92,11 +92,7 @@ const Header = () => {
 
           <ComboboxList>
             {results.map((item) => (
-              <ComboboxItem
-                key={item.deezerId}
-                render={<Link href={`/track/${item.deezerId}`} />}
-                value={item}
-              >
+              <ComboboxItem key={item.id} render={<Link href={`/track/${item.id}`} />} value={item}>
                 <div
                   aria-hidden
                   className="size-8 shrink-0 rounded bg-muted bg-cover bg-center"

@@ -34,8 +34,8 @@ const SearchResults = ({ query, result }: Props) => {
   return (
     <>
       {result.data.map((track) => (
-        <li className="border-border not-last:border-b" key={track.deezerId}>
-          <Link className="flex items-center gap-4 px-7 py-3" href={`/track/${track.deezerId}`}>
+        <li className="border-border not-last:border-b" key={track.id}>
+          <Link className="flex items-center gap-4 px-7 py-3" href={`/track/${track.id}`}>
             <Image
               alt={track.albumName}
               className="shrink-0 rounded-tile"

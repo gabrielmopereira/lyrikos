@@ -4,9 +4,9 @@ const searchTrack = z.object({
   albumCover: z.url(),
   albumName: z.string(),
   artistName: z.string(),
-  deezerId: z.string(),
   duration: z.number(),
   explicitLyrics: z.boolean(),
+  id: z.string(),
   title: z.string(),
 });
 type SearchTrack = z.infer<typeof searchTrack>;
