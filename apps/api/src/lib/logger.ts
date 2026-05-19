@@ -13,4 +13,11 @@ export const logger = pino({
     paths: ["req.headers.authorization", "req.headers.cookie", "res.headers"],
     remove: true,
   },
+  transport:
+    env.NODE_ENV === "production"
+      ? undefined
+      : {
+          options: { colorize: true, ignore: "pid,hostname,env", translateTime: "HH:MM:ss.l" },
+          target: "pino-pretty",
+        },
 });
