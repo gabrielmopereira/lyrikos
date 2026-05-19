@@ -62,3 +62,6 @@ logs/
 # agent output
 /agents/
 .fallow/
+
+# claude
+.claude/
