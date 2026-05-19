@@ -4,31 +4,10 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { getTrack, getTrackLyrics, type LyricsStatus, type TrackLyrics } from "@/lib/api";
+import { parseLyrics, formatDuration } from "@/lib/lyrics";
+import type { LyricLine } from "@/types/lyrics";
 
-import LyricsViewer, { type LyricLine } from "./_components/lyrics-viewer";
-
-const LRC_LINE_REGEX = /^\[(\d+):(\d+)(?:[.:]\d+)?\](.*)$/v;
-
-const parseSyncedLyrics = (synced: string): Array<LyricLine> =>
-  synced
-    .split("\n")
-    .map((raw): LyricLine | null => {
-      const match = LRC_LINE_REGEX.exec(raw);
-      if (!match) {
-        return null;
-      }
-      const [, minutes, seconds, text] = match;
-      const trimmed = text.trim();
-      if (!trimmed) {
-        return null;
-      }
-      return {
-        original: trimmed,
-        time: `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`,
-        translation: "",
-      };
-    })
-    .filter((line): line is LyricLine => line !== null);
+import LyricsViewer from "./_components/lyrics-viewer";
 
 const LYRICS_FALLBACK_MESSAGES: Record<LyricsStatus, string> = {
   AVAILABLE: "Lyrics are available but couldn't be displayed.",
@@ -41,25 +20,16 @@ const LYRICS_FALLBACK_MESSAGES: Record<LyricsStatus, string> = {
 const lyricsFallbackMessage = (lyrics: TrackLyrics | null): string =>
   lyrics ? LYRICS_FALLBACK_MESSAGES[lyrics.status] : "Lyrics are not available for this track yet.";
 
-// TODO: save user preference for lyrics display
-// TODO: Add share button
-
 const language = {
   source: { code: "EN", label: "English" },
   target: { code: "EL", label: "Ελληνικά" },
-};
-
-const formatDuration = (seconds: number) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-const TrackPage = async ({ params }: Props) => {
+const Page = async ({ params }: Props) => {
   const { id } = await params;
   const track = await getTrack(id);
 
@@ -68,10 +38,7 @@ const TrackPage = async ({ params }: Props) => {
   }
 
   const lyrics = await getTrackLyrics(id);
-  const lines: Array<LyricLine> =
-    lyrics?.status === "AVAILABLE" && lyrics.syncedLyrics
-      ? parseSyncedLyrics(lyrics.syncedLyrics)
-      : [];
+  const lines: Array<LyricLine> = lyrics?.status === "AVAILABLE" ? parseLyrics(lyrics) : [];
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-8 p-8">
@@ -117,8 +84,8 @@ const TrackPage = async ({ params }: Props) => {
         <Card className="min-h-0">
           <LyricsViewer
             lines={lines}
-            sourceLabel={language.source.label}
-            targetLabel={language.target.label}
+            sourceLanguage={language.source}
+            targetLanguage={language.target}
           />
         </Card>
       ) : (
@@ -130,4 +97,4 @@ const TrackPage = async ({ params }: Props) => {
   );
 };
 
-export default TrackPage;
+export default Page;
