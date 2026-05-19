@@ -6,6 +6,7 @@ export const envSchema = z.object({
   CORS_ORIGINS: z.string().default("https://lyrikos.web.localhost"),
   DATABASE_URL: z.string().min(1),
   FROM_EMAIL: z.string().default("noreply@lyrikos.example.com"),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.string().default("4000"),

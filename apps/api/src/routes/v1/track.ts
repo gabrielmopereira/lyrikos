@@ -2,10 +2,12 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Prisma } from "@repo/db";
 import { LyricsStatus } from "@repo/db";
 
+import { logger } from "@/lib/logger";
 import { AppError } from "@/middleware/error-handler";
 import type { DeezerTrackResponse } from "@/services/deezer.service";
 import { deezerService } from "@/services/deezer.service";
 import { lrclibService } from "@/services/lrclib.service";
+import { lyricsResearchService } from "@/services/lyrics-research.service";
 import type { LyricsFetchResult } from "@/services/lyrics.service";
 import { lyricsService } from "@/services/lyrics.service";
 import { trackService } from "@/services/track.service";
@@ -168,6 +170,16 @@ v1TrackRoutes.openapi(trackLyricsRoute, async (c) => {
   }
 
   const lyrics = await lyricsService.create({ result, trackId: id });
+
+  if (lyrics.status === "AVAILABLE") {
+    void (async () => {
+      try {
+        await lyricsResearchService.generate({ lyrics, track });
+      } catch (error) {
+        logger.error({ error, lyricsId: lyrics.id }, "Background research failed");
+      }
+    })();
+  }
 
   return c.json(lyrics, 200);
 });
