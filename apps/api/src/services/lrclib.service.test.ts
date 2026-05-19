@@ -82,13 +82,13 @@ describe("LrclibService", () => {
     });
 
     it("should accept an optional instrumental track without syncedLyrics", async () => {
-      const instrumental = { ...mockLrclibResponse, instrumental: true, syncedLyrics: undefined };
+      const instrumental = { ...mockLrclibResponse, instrumental: true, syncedLyrics: null };
       fetchMock.mockResolvedValue(createMockResponse(instrumental));
 
       const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
 
       expect(result?.instrumental).toBe(true);
-      expect(result?.syncedLyrics).toBeUndefined();
+      expect(result?.syncedLyrics).toBeNull();
     });
 
     it("should throw AppError 502 LRCLIB_UPSTREAM_ERROR when upstream is not ok", async () => {

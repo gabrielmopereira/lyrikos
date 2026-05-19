@@ -14,8 +14,8 @@ const getLyricsResponseSchema = z.object({
   duration: z.number(),
   id: z.number(),
   instrumental: z.boolean(),
-  plainLyrics: z.string(),
-  syncedLyrics: z.string().optional(),
+  plainLyrics: z.string().nullable(),
+  syncedLyrics: z.string().nullable(),
   trackName: z.string(),
 });
 type GetLyricsResponse = z.infer<typeof getLyricsResponseSchema>;
