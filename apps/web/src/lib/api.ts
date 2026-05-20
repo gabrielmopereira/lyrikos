@@ -41,6 +41,7 @@ const lyricsStatusSchema = z.enum([
 type LyricsStatus = z.infer<typeof lyricsStatusSchema>;
 
 const trackLyricsSchema = z.object({
+  language: z.string().nullable(),
   plainLyrics: z.string().nullable(),
   status: lyricsStatusSchema,
   syncedLyrics: z.string().nullable(),

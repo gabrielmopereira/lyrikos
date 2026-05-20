@@ -1,18 +1,15 @@
+"use client";
+
 import { Alert, AlertDescription, AlertTitle } from "@repo/ui/components/alert";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 
 import type { LyricLine } from "@/types/lyrics";
 
-export type LyricsLanguage = {
-  code: string;
-  label: string;
-};
+import { useLanguage } from "./language-provider";
 
 type LyricsViewerProps = {
   lines: Array<LyricLine>;
-  sourceLanguage: LyricsLanguage;
-  targetLanguage: LyricsLanguage;
 };
 
 const lineCount = (lines: Array<LyricLine>) => lines.length;
@@ -23,8 +20,10 @@ const isTranslated = (lines: Array<LyricLine>) =>
 
 const isSynced = (lines: Array<LyricLine>) => lines.some((line) => line.time);
 
-const LyricsViewer = ({ lines, sourceLanguage, targetLanguage }: LyricsViewerProps) => {
-  const showOnlyOriginal = sourceLanguage.code === targetLanguage.code || !isTranslated(lines);
+const LyricsViewer = ({ lines }: LyricsViewerProps) => {
+  const { source, target } = useLanguage();
+
+  const showOnlyOriginal = !source || source.code === target.code || !isTranslated(lines);
   const showTimes = isSynced(lines);
 
   return (
@@ -90,13 +89,13 @@ const LyricsViewer = ({ lines, sourceLanguage, targetLanguage }: LyricsViewerPro
             }
           >
             <span className="font-mono text-xs tracking-widest text-marble-dim uppercase">
-              {sourceLanguage.label}
+              {source?.label ?? ""}
             </span>
 
             {showTimes ? <span className="font-mono text-xs text-marble-faint">→</span> : null}
 
             <span className="ml-2 font-mono text-xs tracking-widest text-primary uppercase">
-              {targetLanguage.label}
+              {target.label}
             </span>
           </div>
 
