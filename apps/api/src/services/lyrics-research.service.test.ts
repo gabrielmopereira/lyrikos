@@ -83,7 +83,7 @@ const baseLyrics = {
 
 const validNotes = {
   artistContext: "",
-  detectedLanguage: "en",
+  detectedLanguage: "en-US",
   idioms: [],
   mood: ["happy"],
   perspective: { addressee: null, tense: "present", voice: "first" },
@@ -212,7 +212,7 @@ describe("LyricsResearchService", () => {
       });
       expect(createCall?.data.notes).not.toHaveProperty("summary");
       expect(createCall?.data.notes).toMatchObject({
-        detectedLanguage: "en",
+        detectedLanguage: "en-US",
         mood: ["happy"],
         themes: ["love"],
       });
@@ -227,13 +227,13 @@ describe("LyricsResearchService", () => {
       await service.generate({ lyrics: baseLyrics, track: baseTrack });
 
       expect(prisma.lyrics.update).toHaveBeenCalledWith({
-        data: { language: "en" },
+        data: { language: "en-US" },
         where: { id: lyricsId },
       });
     });
 
     it("does not overwrite Lyrics.language when already set", async () => {
-      const lyrics = { ...baseLyrics, language: "pt" } as Lyrics;
+      const lyrics = { ...baseLyrics, language: "pt-BR" } as Lyrics;
       vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
       generateTextMock.mockResolvedValue({ output: validNotes });
       vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);

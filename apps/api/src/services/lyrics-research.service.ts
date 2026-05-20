@@ -4,6 +4,7 @@ import type { Lyrics, LyricsResearch, Prisma } from "@repo/db";
 import { Output, generateText, stepCountIs } from "ai";
 
 import { describeAiError } from "@/lib/ai-errors";
+import { canonicalizeLanguageTag } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
 import {
@@ -146,7 +147,7 @@ export class LyricsResearchService {
     if (!lyrics.language && notes.detectedLanguage) {
       try {
         await prisma.lyrics.update({
-          data: { language: notes.detectedLanguage },
+          data: { language: canonicalizeLanguageTag(notes.detectedLanguage) },
           where: { id: lyrics.id },
         });
       } catch (error) {

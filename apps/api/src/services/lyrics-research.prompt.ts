@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { isRegionSpecificLanguageTag } from "@/lib/language";
+
 export const MODEL_ID = "gemini-3-flash-preview" as const;
 export const PROMPT_VERSION = "research-v1" as const;
 
@@ -37,8 +39,11 @@ export const researchNotesSchema = z.object({
   detectedLanguage: z
     .string()
     .describe(
-      "ISO 639-1 code (e.g., 'en', 'pt', 'es', 'ja') of the dominant language in the lyrics. For mixed-language lyrics, pick the primary language and surface the secondary in `translationHazards`.",
-    ),
+      "BCP 47 language tag with a required region subtag (e.g., 'en-US', 'en-GB', 'pt-BR', 'de-DE', 'es-MX', 'ja-JP') of the dominant language in the lyrics. Use the regional variant that best matches the lyrics' diction, slang, and cultural references — bare language tags like 'en' or 'pt' are not allowed. For mixed-language lyrics, pick the primary language and surface the secondary in `translationHazards`.",
+    )
+    .refine(isRegionSpecificLanguageTag, {
+      message: "detectedLanguage must be a BCP 47 tag with a region subtag (e.g., 'en-US')",
+    }),
 
   idioms: z
     .array(
