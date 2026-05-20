@@ -35,6 +35,7 @@ const LyricsSchema = z
     contentHash: z.string().nullable(),
     errorMessage: z.string().nullable(),
     fetchedAt: z.date().nullable(),
+    language: z.string().nullable(),
     plainLyrics: z.string().nullable(),
     status: z.enum(LyricsStatus),
     syncedLyrics: z.string().nullable(),
