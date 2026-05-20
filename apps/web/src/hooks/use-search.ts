@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { searchTracks, type Track } from "@/lib/api";
+import { searchTracks, type SearchTrack } from "@/lib/api";
 
 const DEBOUNCE_MS = 600;
 
 const useSearch = (query: string, limit = 10) => {
-  const [results, setResults] = useState<Array<Track>>([]);
+  const [results, setResults] = useState<Array<SearchTrack>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
 
