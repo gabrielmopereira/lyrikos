@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.stubEnv("ANTHROPIC_API_KEY", "fake-anthropic-key");
 vi.stubEnv("BETTER_AUTH_SECRET", "a".repeat(32));
 vi.stubEnv("DATABASE_URL", "postgresql://user:pass@localhost:5432/db");
 vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "fake-key");
@@ -7,6 +8,7 @@ vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "fake-key");
 const { envSchema } = await import("./env");
 
 const validEnv = {
+  ANTHROPIC_API_KEY: "fake-anthropic-key",
   BETTER_AUTH_SECRET: "a".repeat(32),
   DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
   GOOGLE_GENERATIVE_AI_API_KEY: "fake-key",

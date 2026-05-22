@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const envSchema = z.object({
+  ANTHROPIC_API_KEY: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().default("https://lyrikos.api.localhost"),
   CORS_ORIGINS: z.string().default("https://lyrikos.web.localhost"),
