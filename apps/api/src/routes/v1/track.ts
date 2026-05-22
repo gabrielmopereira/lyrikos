@@ -1,36 +1,16 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import type { Prisma } from "@repo/db";
 import { LyricsStatus } from "@repo/db";
+import { streamSSE } from "hono/streaming";
 
+import { isRegionSpecificLanguageTag } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/middleware/error-handler";
-import type { DeezerTrackResponse } from "@/services/deezer.service";
-import { deezerService } from "@/services/deezer.service";
-import { lrclibService } from "@/services/lrclib.service";
-import { lyricsResearchService } from "@/services/lyrics-research.service";
-import type { LyricsFetchResult } from "@/services/lyrics.service";
 import { lyricsService } from "@/services/lyrics.service";
+import { pipelineService } from "@/services/pipeline.service";
 import { trackService } from "@/services/track.service";
+import { translationService } from "@/services/translation.service";
 
-// Need to add relations
-const trackSchema = z
-  .object({
-    albumCover: z.url(),
-    albumName: z.string(),
-    artistId: z.string(),
-    artistName: z.string(),
-    createdAt: z.date(),
-    duration: z.number(),
-    explicitLyrics: z.boolean(),
-    id: z.string(),
-    isrc: z.string(),
-    shortTitle: z.string(),
-    title: z.string(),
-    updatedAt: z.date(),
-  })
-  .openapi("Track");
-
-const LyricsSchema = z
+const lyricsSchema = z
   .object({
     contentHash: z.string().nullable(),
     errorMessage: z.string().nullable(),
@@ -41,6 +21,46 @@ const LyricsSchema = z
     syncedLyrics: z.string().nullable(),
   })
   .openapi("Lyrics");
+
+const trackSchema = z
+  .object({
+    albumCover: z.url(),
+    albumId: z.string(),
+    albumName: z.string(),
+    artistId: z.string(),
+    artistName: z.string(),
+    createdAt: z.date(),
+    duration: z.number(),
+    explicitLyrics: z.boolean(),
+    id: z.string(),
+    isrc: z.string(),
+    lyrics: lyricsSchema.nullable(),
+    shortTitle: z.string(),
+    title: z.string(),
+    updatedAt: z.date(),
+  })
+  .openapi("Track");
+
+const translationSchema = z
+  .object({
+    downvotes: z.number(),
+    generatedAt: z.date(),
+    id: z.string(),
+    language: z.string(),
+    segments: z.unknown(),
+    selfScore: z.number().nullable(),
+    translatorNote: z.string().nullable(),
+    upvotes: z.number(),
+  })
+  .openapi("Translation");
+type Translation = z.infer<typeof translationSchema>;
+
+const trackViewSchema = z
+  .object({
+    track: trackSchema,
+    translation: translationSchema.nullable(),
+  })
+  .openapi("TrackView");
 
 const errorSchema = z
   .object({
@@ -53,97 +73,103 @@ const errorSchema = z
   })
   .openapi("Error");
 
-const v1TrackRoutes = new OpenAPIHono();
-
-const deezerTrackToCreateInput = (deezerTrack: DeezerTrackResponse): Prisma.TrackCreateInput => ({
-  albumCover: deezerTrack.album.cover_medium,
-  albumId: String(deezerTrack.album.id),
-  albumName: deezerTrack.album.title,
-  artistId: String(deezerTrack.artist.id),
-  artistName: deezerTrack.artist.name,
-  duration: deezerTrack.duration,
-  explicitLyrics: deezerTrack.explicit_lyrics,
-  id: String(deezerTrack.id),
-  isrc: deezerTrack.isrc,
-  shortTitle: deezerTrack.title_short,
-  title: deezerTrack.title,
+const targetLanguageQuery = z.object({
+  lang: z.string().refine(isRegionSpecificLanguageTag, {
+    message: "lang must be a BCP 47 tag with a region subtag (e.g., 'pt-BR')",
+  }),
 });
 
+const v1TrackRoutes = new OpenAPIHono();
+
 const trackRoute = createRoute({
-  description: "Returns the track data from the database, falling back to Deezer when missing.",
+  description: "Returns the track from the database.",
   method: "get",
   path: "/{id}",
-  request: {
-    params: z.object({ id: z.string() }),
-  },
+  request: { params: z.object({ id: z.string() }) },
   responses: {
     200: {
       content: { "application/json": { schema: trackSchema } },
       description: "Track data",
     },
-    400: {
-      content: { "application/json": { schema: errorSchema } },
-      description: "Invalid query parameters",
-    },
     404: {
       content: { "application/json": { schema: errorSchema } },
       description: "Track not found",
     },
   },
-  summary: "Get a track by Deezer ID",
+  summary: "Get a track by Deezer ID (read-only)",
   tags: ["Track"],
 });
 
 v1TrackRoutes.openapi(trackRoute, async (c) => {
   const { id } = c.req.valid("param");
+  const track = await trackService.findById(id);
 
-  const storedTrack = await trackService.findById(id);
-
-  if (storedTrack) {
-    return c.json(storedTrack, 200);
+  if (!track) {
+    throw new AppError("Track not found", 404, true, "NOT_FOUND");
   }
 
-  const deezerTrack = await deezerService.getTrack(id);
-  const trackCreateInput = deezerTrackToCreateInput(deezerTrack);
-
-  const createdTrack = await trackService.create(trackCreateInput);
-
-  return c.json(createdTrack, 200);
+  return c.json(track, 200);
 });
 
 const trackLyricsRoute = createRoute({
-  description: "Returns the track lyrics from the database, falling back to LRCLIB when missing.",
+  description: "Returns the lyrics from the database.",
   method: "get",
   path: "/{id}/lyrics",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      content: { "application/json": { schema: lyricsSchema } },
+      description: "Track lyrics",
+    },
+    404: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Track or lyrics not found",
+    },
+  },
+  summary: "Get a track's lyrics by Deezer ID (read-only)",
+  tags: ["Track"],
+});
+
+v1TrackRoutes.openapi(trackLyricsRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const lyrics = await lyricsService.findByTrackId(id);
+
+  if (!lyrics) {
+    throw new AppError("Lyrics not found", 404, true, "NOT_FOUND");
+  }
+
+  return c.json(lyrics, 200);
+});
+
+const trackViewRoute = createRoute({
+  description: "Bundle endpoint: returns track and cached translation for the target language.",
+  method: "get",
+  path: "/{id}/view",
   request: {
     params: z.object({ id: z.string() }),
+    query: targetLanguageQuery,
   },
   responses: {
     200: {
-      content: { "application/json": { schema: LyricsSchema } },
-      description: "Track lyrics",
+      content: { "application/json": { schema: trackViewSchema } },
+      description: "Track view bundle",
     },
     400: {
       content: { "application/json": { schema: errorSchema } },
-      description: "Invalid query parameters",
+      description: "Invalid language",
     },
     404: {
       content: { "application/json": { schema: errorSchema } },
       description: "Track not found",
     },
   },
-  summary: "Get a track lyrics by Deezer ID",
+  summary: "Get the cached track view for a target language (read-only)",
   tags: ["Track"],
 });
 
-v1TrackRoutes.openapi(trackLyricsRoute, async (c) => {
+v1TrackRoutes.openapi(trackViewRoute, async (c) => {
   const { id } = c.req.valid("param");
-
-  const storedLyrics = await lyricsService.findByTrackId(id);
-
-  if (storedLyrics) {
-    return c.json(storedLyrics, 200);
-  }
+  const { lang } = c.req.valid("query");
 
   const track = await trackService.findById(id);
 
@@ -151,38 +177,70 @@ v1TrackRoutes.openapi(trackLyricsRoute, async (c) => {
     throw new AppError("Track not found", 404, true, "NOT_FOUND");
   }
 
-  let result: LyricsFetchResult;
+  const translation: Translation | null = await translationService.findByTrackAndLanguage(id, lang);
 
-  try {
-    const lrclibLyrics = await lrclibService.getLyrics(
-      track.title,
-      track.artistName,
-      track.albumName,
-      track.duration,
+  return c.json(
+    {
+      track,
+      translation,
+    },
+    200,
+  );
+});
+
+v1TrackRoutes.get("/:id/pipeline", (c) => {
+  const id = c.req.param("id");
+  const lang = c.req.query("lang");
+
+  if (!lang || !isRegionSpecificLanguageTag(lang)) {
+    throw new AppError(
+      "lang query parameter must be a BCP 47 tag with a region subtag (e.g., 'pt-BR')",
+      400,
+      true,
+      "INVALID_LANGUAGE",
     );
-
-    result = lrclibLyrics ? { data: lrclibLyrics, kind: "found" } : { kind: "not_found" };
-  } catch (error) {
-    result = {
-      errorMessage:
-        error instanceof AppError ? error.message : "Unexpected error while fetching lyrics",
-      kind: "failed",
-    };
   }
 
-  const lyrics = await lyricsService.create({ result, trackId: id });
-
-  if (lyrics.status === "AVAILABLE") {
-    void (async () => {
+  return streamSSE(
+    c,
+    async (stream) => {
       try {
-        await lyricsResearchService.generate({ lyrics, track });
-      } catch (error) {
-        logger.error({ error, lyricsId: lyrics.id }, "Background research failed");
-      }
-    })();
-  }
+        for await (const event of pipelineService.run({ targetLanguage: lang, trackId: id })) {
+          if (stream.aborted || stream.closed) {
+            break;
+          }
 
-  return c.json(lyrics, 200);
+          await stream.writeSSE({
+            data: JSON.stringify(event),
+            event: `${event.phase}:${event.status}`,
+          });
+        }
+      } catch (error) {
+        logger.error({ error, lang, trackId: id }, "Pipeline stream crashed");
+
+        if (!stream.aborted && !stream.closed) {
+          await stream.writeSSE({
+            data: JSON.stringify({
+              code: error instanceof AppError ? error.code : "UNKNOWN_ERROR",
+              message:
+                error instanceof Error ? error.message : "Pipeline stream crashed unexpectedly",
+            }),
+            event: "pipeline:crashed",
+          });
+        }
+      }
+    },
+    async (error, stream) => {
+      logger.error({ error, lang, trackId: id }, "Pipeline SSE writer error");
+
+      if (!stream.aborted && !stream.closed) {
+        await stream.writeSSE({
+          data: JSON.stringify({ code: "SSE_WRITER_ERROR", message: error.message }),
+          event: "pipeline:crashed",
+        });
+      }
+    },
+  );
 });
 
 export { v1TrackRoutes };
