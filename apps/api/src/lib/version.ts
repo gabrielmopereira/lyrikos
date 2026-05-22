@@ -1,6 +1,8 @@
 import { sha256 } from "hono/utils/crypto";
 
-export const computeResearchVersion = ({
+import { AppError } from "@/middleware/error-handler";
+
+export const computeResearchVersion = async ({
   modelId,
   promptVersion,
   sourceContentHash,
@@ -8,4 +10,17 @@ export const computeResearchVersion = ({
   modelId: string;
   promptVersion: string;
   sourceContentHash: string;
-}) => sha256(`${modelId}|${promptVersion}|${sourceContentHash}`);
+}) => {
+  const hash = await sha256(`${modelId}|${promptVersion}|${sourceContentHash}`);
+
+  if (!hash) {
+    throw new AppError(
+      "Failed to compute research version hash",
+      500,
+      false,
+      "TRANSLATION_HASH_ERROR",
+    );
+  }
+
+  return hash;
+};
