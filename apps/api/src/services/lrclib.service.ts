@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { logger } from "@/lib/logger";
-import { AppError } from "@/middleware/error-handler";
 
 import { version } from "../../package.json" with { type: "json" };
 
@@ -20,6 +19,11 @@ const getLyricsResponseSchema = z.object({
 });
 type GetLyricsResponse = z.infer<typeof getLyricsResponseSchema>;
 
+type LrclibResult =
+  | { data: GetLyricsResponse; kind: "found" }
+  | { kind: "not_found" }
+  | { errorMessage: string; kind: "failed" };
+
 export class LrclibService {
   private baseUrl = "https://lrclib.net/api/";
   private path = {
@@ -30,55 +34,59 @@ export class LrclibService {
     "User-Agent": LRCLIB_USER_AGENT,
   };
 
-  async getLyrics(trackName: string, artistName: string, albumName: string, duration: number) {
-    try {
-      const searchParams = new URLSearchParams({
-        album_name: albumName,
-        artist_name: artistName,
-        duration: duration.toString(),
-        track_name: trackName,
-      });
+  async getLyrics(
+    trackName: string,
+    artistName: string,
+    albumName: string,
+    duration: number,
+  ): Promise<LrclibResult> {
+    const searchParams = new URLSearchParams({
+      album_name: albumName,
+      artist_name: artistName,
+      duration: duration.toString(),
+      track_name: trackName,
+    });
+    const url = `${this.baseUrl}${this.path.get}?${searchParams.toString()}`;
 
-      const url = `${this.baseUrl}${this.path.get}?${searchParams.toString()}`;
-      const response = await fetch(url, {
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
         headers: this.headers,
         signal: AbortSignal.timeout(LRCLIB_TIMEOUT),
       });
-
-      if (response.status === 404) {
-        logger.info({ albumName, artistName, duration, trackName }, "Track lyrics not found");
-        return null;
-      }
-
-      if (!response.ok) {
-        logger.error(
-          { body: await response.text(), status: response.status },
-          "Lrclib fetch failed",
-        );
-        throw new AppError("Failed to fetch data", 502, true, "LRCLIB_UPSTREAM_ERROR");
-      }
-
-      const data = await response.json();
-      const result = getLyricsResponseSchema.safeParse(data);
-
-      if (!result.success) {
-        logger.error({ issues: result.error.issues }, "Lrclib response parsing failed");
-        throw new AppError("Failed to parse data", 502, true, "LRCLIB_UPSTREAM_ERROR");
-      }
-
-      logger.info({ albumName, artistName, duration, trackName }, "Track lyrics found");
-
-      return result.data;
     } catch (error) {
-      if (error instanceof AppError) {
-        throw error;
-      }
+      const errorMessage = error instanceof Error ? error.message : "Network error";
 
-      logger.error(error, "Unexpected error");
-      throw new AppError("Unexpected error", 500, true, "INTERNAL_SERVER_ERROR");
+      logger.error(
+        { albumName, artistName, error, trackName },
+        "Lrclib request failed before response",
+      );
+
+      return { errorMessage, kind: "failed" };
     }
+
+    if (response.status === 404) {
+      logger.info({ albumName, artistName, duration, trackName }, "Track lyrics not found");
+      return { kind: "not_found" };
+    }
+
+    if (!response.ok) {
+      logger.error({ body: await response.text(), status: response.status }, "Lrclib fetch failed");
+      return { errorMessage: `Upstream returned ${response.status}`, kind: "failed" };
+    }
+
+    const parsed = getLyricsResponseSchema.safeParse(await response.json());
+
+    if (!parsed.success) {
+      logger.error({ issues: parsed.error.issues }, "Lrclib response parsing failed");
+      return { errorMessage: "Invalid upstream response shape", kind: "failed" };
+    }
+
+    logger.info({ albumName, artistName, duration, trackName }, "Track lyrics found");
+    return { data: parsed.data, kind: "found" };
   }
 }
 
-export type { GetLyricsResponse };
+export type { GetLyricsResponse, LrclibResult };
 export const lrclibService = new LrclibService();

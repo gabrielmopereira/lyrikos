@@ -8,8 +8,6 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn() },
 }));
 
-import { AppError } from "@/middleware/error-handler";
-
 import { LrclibService } from "./lrclib.service";
 
 const lrclibService = new LrclibService();
@@ -42,12 +40,12 @@ describe("LrclibService", () => {
   });
 
   describe("getLyrics", () => {
-    it("should return parsed response on success", async () => {
+    it("should return a found result on success", async () => {
       fetchMock.mockResolvedValue(createMockResponse(mockLrclibResponse));
 
       const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
 
-      expect(result).toEqual(mockLrclibResponse);
+      expect(result).toEqual({ data: mockLrclibResponse, kind: "found" });
     });
 
     it("should call fetch with track, artist, album, and duration query params", async () => {
@@ -73,12 +71,12 @@ describe("LrclibService", () => {
       expect(headers?.["User-Agent"]).toMatch(/^Lyrikos v/v);
     });
 
-    it("should return null on 404", async () => {
+    it("should return a not_found result on 404", async () => {
       fetchMock.mockResolvedValue(createMockResponse({ error: "not found" }, { status: 404 }));
 
       const result = await lrclibService.getLyrics("Missing", "Artist", "Album", 100);
 
-      expect(result).toBeNull();
+      expect(result).toEqual({ kind: "not_found" });
     });
 
     it("should accept an optional instrumental track without syncedLyrics", async () => {
@@ -87,46 +85,37 @@ describe("LrclibService", () => {
 
       const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
 
-      expect(result?.instrumental).toBe(true);
-      expect(result?.syncedLyrics).toBeNull();
-    });
-
-    it("should throw AppError 502 LRCLIB_UPSTREAM_ERROR when upstream is not ok", async () => {
-      fetchMock.mockImplementation(() =>
-        Promise.resolve(createMockResponse("upstream down", { status: 503 })),
-      );
-
-      await expect(
-        lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180),
-      ).rejects.toThrow(AppError);
-      await expect(
-        lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180),
-      ).rejects.toMatchObject({
-        code: "LRCLIB_UPSTREAM_ERROR",
-        statusCode: 502,
+      expect(result).toMatchObject({
+        data: { instrumental: true, syncedLyrics: null },
+        kind: "found",
       });
     });
 
-    it("should throw AppError 502 LRCLIB_UPSTREAM_ERROR when response shape is invalid", async () => {
+    it("should return a failed result when upstream is not ok", async () => {
+      fetchMock.mockResolvedValue(createMockResponse("upstream down", { status: 503 }));
+
+      const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
+
+      expect(result).toEqual({ errorMessage: "Upstream returned 503", kind: "failed" });
+    });
+
+    it("should return a failed result when response shape is invalid", async () => {
       fetchMock.mockResolvedValue(createMockResponse({ unexpected: "shape" }));
 
-      await expect(
-        lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180),
-      ).rejects.toMatchObject({
-        code: "LRCLIB_UPSTREAM_ERROR",
-        statusCode: 502,
+      const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
+
+      expect(result).toEqual({
+        errorMessage: "Invalid upstream response shape",
+        kind: "failed",
       });
     });
 
-    it("should throw AppError 500 INTERNAL_SERVER_ERROR on network failure", async () => {
+    it("should return a failed result on network failure", async () => {
       fetchMock.mockRejectedValue(new Error("Network error"));
 
-      await expect(
-        lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180),
-      ).rejects.toMatchObject({
-        code: "INTERNAL_SERVER_ERROR",
-        statusCode: 500,
-      });
+      const result = await lrclibService.getLyrics("Test Track", "Test Artist", "Test Album", 180);
+
+      expect(result).toEqual({ errorMessage: "Network error", kind: "failed" });
     });
   });
 });
