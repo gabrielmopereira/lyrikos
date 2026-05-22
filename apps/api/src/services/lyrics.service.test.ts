@@ -118,12 +118,12 @@ describe("LyricsService", () => {
       vi.mocked(prisma.lyrics.findUnique).mockResolvedValue(null as never);
       vi.mocked(prisma.lyrics.create).mockResolvedValue(mockLyrics as never);
 
-      const data: LrclibResponse = { ...baseLrclibResponse, syncedLyrics: undefined };
+      const data: LrclibResponse = { ...baseLrclibResponse, syncedLyrics: null };
 
       await lyricsService.create({ result: { data, kind: "found" }, trackId });
 
       const createCall = vi.mocked(prisma.lyrics.create).mock.calls[0]?.[0];
-      expect(createCall?.data.syncedLyrics).toBeUndefined();
+      expect(createCall?.data.syncedLyrics).toBeNull();
       expect(createCall?.data.contentHash).toHaveLength(64);
     });
 

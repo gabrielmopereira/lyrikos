@@ -4,12 +4,7 @@ import { sha256 } from "hono/utils/crypto";
 
 import { logger } from "@/lib/logger";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
-import type { GetLyricsResponse as LrclibResponse } from "@/services/lrclib.service";
-
-type LyricsFetchResult =
-  | { data: LrclibResponse; kind: "found" }
-  | { kind: "not_found" }
-  | { errorMessage: string; kind: "failed" };
+import type { LrclibResult } from "@/services/lrclib.service";
 
 export class LyricsService {
   async findByTrackId(trackId: string) {
@@ -25,7 +20,7 @@ export class LyricsService {
     }
   }
 
-  async create({ result, trackId }: { result: LyricsFetchResult; trackId: string }) {
+  async create({ result, trackId }: { result: LrclibResult; trackId: string }) {
     try {
       const existing = await prisma.lyrics.findUnique({ where: { trackId } });
 
@@ -104,5 +99,4 @@ export class LyricsService {
   }
 }
 
-export type { LyricsFetchResult };
 export const lyricsService = new LyricsService();
