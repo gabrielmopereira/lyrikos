@@ -25,14 +25,14 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
-    "fallow": "^2.69.0",
+    "@playwright/test": "^1.60.0",
+    "fallow": "^2.80.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.4",
+    "lint-staged": "^17.0.5",
     "oxfmt": "^0.48.0",
-    "oxlint": "^1.63.0",
+    "oxlint": "^1.66.0",
     "oxlint-config-awesomeness": "^3.0.2",
-    "turbo": "^2.9.12"
+    "turbo": "^2.9.14"
   },
   "lint-staged": {
     "!(*.d).{ts,tsx,mts,cts,js,jsx,mjs,cjs}": [
