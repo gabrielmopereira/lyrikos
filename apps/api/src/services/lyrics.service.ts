@@ -7,7 +7,7 @@ import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
 import type { LrclibResult } from "@/services/lrclib.service";
 
 export class LyricsService {
-  async findByTrackId(trackId: string) {
+  async findByTrack(trackId: string) {
     try {
       const track = await prisma.lyrics.findUnique({
         where: { trackId },

@@ -5,9 +5,11 @@ import { streamSSE } from "hono/streaming";
 import { isRegionSpecificLanguageTag } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/middleware/error-handler";
+import { deezerService } from "@/services/deezer.service";
 import { lyricsService } from "@/services/lyrics.service";
 import { pipelineService } from "@/services/pipeline.service";
 import { trackService } from "@/services/track.service";
+import { translationSegmentSchema } from "@/services/translation.prompt";
 import { translationService } from "@/services/translation.service";
 
 const lyricsSchema = z
@@ -21,6 +23,7 @@ const lyricsSchema = z
     syncedLyrics: z.string().nullable(),
   })
   .openapi("Lyrics");
+type Lyrics = z.infer<typeof lyricsSchema>;
 
 const trackSchema = z
   .object({
@@ -34,7 +37,6 @@ const trackSchema = z
     explicitLyrics: z.boolean(),
     id: z.string(),
     isrc: z.string(),
-    lyrics: lyricsSchema.nullable(),
     shortTitle: z.string(),
     title: z.string(),
     updatedAt: z.date(),
@@ -47,7 +49,7 @@ const translationSchema = z
     generatedAt: z.date(),
     id: z.string(),
     language: z.string(),
-    segments: z.unknown(),
+    segments: z.array(translationSegmentSchema),
     selfScore: z.number().nullable(),
     translatorNote: z.string().nullable(),
     upvotes: z.number(),
@@ -57,6 +59,7 @@ type Translation = z.infer<typeof translationSchema>;
 
 const trackViewSchema = z
   .object({
+    lyrics: lyricsSchema.nullable(),
     track: trackSchema,
     translation: translationSchema.nullable(),
   })
@@ -132,7 +135,7 @@ const trackLyricsRoute = createRoute({
 
 v1TrackRoutes.openapi(trackLyricsRoute, async (c) => {
   const { id } = c.req.valid("param");
-  const lyrics = await lyricsService.findByTrackId(id);
+  const lyrics = await lyricsService.findByTrack(id);
 
   if (!lyrics) {
     throw new AppError("Lyrics not found", 404, true, "NOT_FOUND");
@@ -171,21 +174,27 @@ v1TrackRoutes.openapi(trackViewRoute, async (c) => {
   const { id } = c.req.valid("param");
   const { lang } = c.req.valid("query");
 
-  const track = await trackService.findById(id);
+  let track = await trackService.findById(id);
 
   if (!track) {
-    throw new AppError("Track not found", 404, true, "NOT_FOUND");
+    const deezerTrack = await deezerService.getTrack(id);
+    const createInput = trackService.deezerTrackToTrackCreateInput(deezerTrack);
+
+    track = await trackService.create(createInput);
   }
 
-  const translation: Translation | null = await translationService.findByTrackAndLanguage(id, lang);
+  const lyrics: Lyrics | null = await lyricsService.findByTrack(id);
 
-  return c.json(
-    {
-      track,
-      translation,
-    },
-    200,
-  );
+  const rawTranslation = await translationService.findByTrackAndLanguage(id, lang);
+  const translation: Translation | null = rawTranslation && translationSchema.parse(rawTranslation);
+
+  const response = {
+    lyrics,
+    track,
+    translation,
+  };
+
+  return c.json(response, 200);
 });
 
 v1TrackRoutes.get("/:id/pipeline", (c) => {

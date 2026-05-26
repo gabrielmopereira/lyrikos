@@ -85,7 +85,7 @@ export class PipelineService {
     }
 
     // Research may have backfilled lyrics.language — re-read to pick up the change.
-    const refreshedLyrics = (await lyricsService.findByTrackId(track.id)) ?? lyrics;
+    const refreshedLyrics = (await lyricsService.findByTrack(track.id)) ?? lyrics;
 
     yield* this.runTranslationPhase({
       lyrics: refreshedLyrics,
@@ -120,7 +120,7 @@ export class PipelineService {
   }
 
   private async *runLyricsPhase(track: Track): AsyncGenerator<PipelineEvent, Lyrics | null> {
-    const existing = await lyricsService.findByTrackId(track.id);
+    const existing = await lyricsService.findByTrack(track.id);
 
     if (existing) {
       yield { data: existing, phase: "lyrics", status: "cached" };

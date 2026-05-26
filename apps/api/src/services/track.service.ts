@@ -3,8 +3,25 @@ import type { Prisma } from "@repo/db";
 
 import { logger } from "@/lib/logger";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
+import type { DeezerTrackResponse } from "@/services/deezer.service";
 
 export class TrackService {
+  deezerTrackToTrackCreateInput(deezerTrack: DeezerTrackResponse) {
+    return {
+      albumCover: deezerTrack.album.cover_medium,
+      albumId: String(deezerTrack.album.id),
+      albumName: deezerTrack.album.title,
+      artistId: String(deezerTrack.artist.id),
+      artistName: deezerTrack.artist.name,
+      duration: deezerTrack.duration,
+      explicitLyrics: deezerTrack.explicit_lyrics,
+      id: String(deezerTrack.id),
+      isrc: deezerTrack.isrc,
+      shortTitle: deezerTrack.title_short,
+      title: deezerTrack.title,
+    };
+  }
+
   async findById(id: string) {
     try {
       const track = await prisma.track.findUnique({
@@ -19,7 +36,6 @@ export class TrackService {
           explicitLyrics: true,
           id: true,
           isrc: true,
-          lyrics: true,
           shortTitle: true,
           title: true,
           updatedAt: true,
