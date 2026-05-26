@@ -6,7 +6,9 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { cn } from "@repo/ui/lib/utils";
 import { Check, ChevronDown } from "lucide-react";
 
-import { LANGUAGES, useLanguage } from "./language-provider";
+import { LANGUAGES } from "@/lib/language";
+
+import { useLanguage } from "./language-provider";
 
 const LanguageSelector = () => {
   const { setTarget, source, target } = useLanguage();

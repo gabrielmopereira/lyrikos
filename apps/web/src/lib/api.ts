@@ -17,20 +17,6 @@ const searchResponseSchema = z.object({
 });
 type SearchResponse = z.infer<typeof searchResponseSchema>;
 
-const trackSchema = z.object({
-  albumCover: z.url(),
-  albumName: z.string(),
-  artistId: z.string(),
-  artistName: z.string(),
-  duration: z.number(),
-  explicitLyrics: z.boolean(),
-  id: z.string(),
-  isrc: z.string(),
-  shortTitle: z.string(),
-  title: z.string(),
-});
-type Track = z.infer<typeof trackSchema>;
-
 const lyricsStatusSchema = z.enum([
   "PENDING",
   "AVAILABLE",
@@ -40,13 +26,55 @@ const lyricsStatusSchema = z.enum([
 ]);
 type LyricsStatus = z.infer<typeof lyricsStatusSchema>;
 
-const trackLyricsSchema = z.object({
+const lyricsSchema = z.object({
   language: z.string().nullable(),
   plainLyrics: z.string().nullable(),
   status: lyricsStatusSchema,
   syncedLyrics: z.string().nullable(),
 });
-type TrackLyrics = z.infer<typeof trackLyricsSchema>;
+type Lyrics = z.infer<typeof lyricsSchema>;
+
+const trackSchema = z.object({
+  albumCover: z.url(),
+  albumId: z.string(),
+  albumName: z.string(),
+  artistId: z.string(),
+  artistName: z.string(),
+  duration: z.number(),
+  explicitLyrics: z.boolean(),
+  id: z.string(),
+  isrc: z.string(),
+  shortTitle: z.string(),
+  title: z.string(),
+  updatedAt: z.string(),
+});
+type Track = z.infer<typeof trackSchema>;
+
+const translationSchema = z.object({
+  downvotes: z.number(),
+  generatedAt: z.string(),
+  id: z.string(),
+  language: z.string(),
+  segments: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      note: z.string().nullable(),
+      original: z.string(),
+      translated: z.string(),
+    }),
+  ),
+  selfScore: z.number().nullable(),
+  translatorNote: z.string().nullable(),
+  upvotes: z.number(),
+});
+type Translation = z.infer<typeof translationSchema>;
+
+const trackViewSchema = z.object({
+  lyrics: lyricsSchema.nullable(),
+  track: trackSchema,
+  translation: translationSchema.nullable(),
+});
+type TrackView = z.infer<typeof trackViewSchema>;
 
 const getApiUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_API_URL;
@@ -98,7 +126,7 @@ const getTrack = async (id: string, init?: { signal?: AbortSignal }): Promise<Tr
 const getTrackLyrics = async (
   id: string,
   init?: { signal?: AbortSignal },
-): Promise<TrackLyrics | null> => {
+): Promise<Lyrics | null> => {
   const response = await fetch(`${getApiUrl()}/api/v1/track/${encodeURIComponent(id)}/lyrics`, {
     cache: "no-store",
     signal: init?.signal,
@@ -113,8 +141,33 @@ const getTrackLyrics = async (
   }
 
   const data = await response.json();
-  return trackLyricsSchema.parse(data);
+  return lyricsSchema.parse(data);
 };
 
-export type { SearchTrack, SearchResponse, Track, TrackLyrics, LyricsStatus };
-export { searchTracks, getTrack, getTrackLyrics };
+const getTrackView = async (
+  id: string,
+  lang: string,
+  init?: { signal?: AbortSignal },
+): Promise<TrackView | null> => {
+  const response = await fetch(
+    `${getApiUrl()}/api/v1/track/${encodeURIComponent(id)}/view?lang=${encodeURIComponent(lang)}`,
+    {
+      cache: "no-store",
+      signal: init?.signal,
+    },
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Track view request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return trackViewSchema.parse(data);
+};
+
+export type { SearchTrack, SearchResponse, Track, Lyrics, LyricsStatus, Translation };
+export { searchTracks, getTrack, getTrackLyrics, getTrackView };

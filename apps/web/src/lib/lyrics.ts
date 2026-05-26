@@ -1,56 +1,47 @@
-import type { TrackLyrics } from "@/lib/api";
-import type { LyricLine } from "@/types/lyrics";
+import type { Lyrics } from "@/lib/api";
 
-const LRC_LINE_REGEX = /^\[(\d+):(\d+)(?:[.:]\d+)?\](.*)$/v;
+const LRC_TIME_REGEX = /^\[(\d+):(\d+)(?:[.:]\d+)?\]/v;
 
-const parseSyncedLyrics = (synced: string): Array<LyricLine> =>
-  synced
-    .split("\n")
-    .map((raw): LyricLine | null => {
-      const match = LRC_LINE_REGEX.exec(raw);
+type LyricRow = { index: number; original: string; time?: string };
 
-      if (!match) {
-        return null;
-      }
+const extractLrcTime = (raw: string): string | undefined => {
+  const match = LRC_TIME_REGEX.exec(raw);
 
-      const [, minutes, seconds, text] = match;
-      const trimmed = text.trim();
-
-      if (!trimmed) {
-        return null;
-      }
-
-      return {
-        original: trimmed,
-        time: `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`,
-        translation: "",
-      };
-    })
-    .filter((line): line is LyricLine => line !== null);
-
-const parsePlainLyrics = (plain: string): Array<LyricLine> =>
-  plain
-    .split("\n")
-    .map((raw) => raw.trim())
-    .filter((line) => line !== "")
-    .map((line) => ({ original: line, translation: "" }));
-
-const parseLyrics = (lyrics: TrackLyrics): Array<LyricLine> => {
-  if (lyrics.syncedLyrics) {
-    return parseSyncedLyrics(lyrics.syncedLyrics);
+  if (!match) {
+    return undefined;
   }
 
-  if (lyrics.plainLyrics) {
-    return parsePlainLyrics(lyrics.plainLyrics);
-  }
-
-  return [];
+  const [, minutes, seconds] = match;
+  return `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`;
 };
 
+// Splits plainLyrics row-by-row (preserving empty rows so indices align with API segments),
+// then attaches timestamps from the same row of syncedLyrics when present.
+const parseLyrics = (lyrics: Lyrics): Array<LyricRow> => {
+  if (!lyrics.plainLyrics) {
+    return [];
+  }
+
+  const syncedRows = lyrics.syncedLyrics?.split("\n") ?? [];
+
+  return lyrics.plainLyrics.split("\n").map((raw, index) => {
+    const time = extractLrcTime(syncedRows[index] ?? "");
+    const row: LyricRow = { index, original: raw.trim() };
+
+    if (time) {
+      row.time = time;
+    }
+
+    return row;
+  });
+};
+
+// Formats a track duration (in seconds) as `m:ss` for the track header.
 const formatDuration = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
+export type { LyricRow };
 export { formatDuration, parseLyrics };
