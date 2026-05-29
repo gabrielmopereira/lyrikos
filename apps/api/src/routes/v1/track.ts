@@ -197,7 +197,7 @@ v1TrackRoutes.openapi(trackViewRoute, async (c) => {
   return c.json(response, 200);
 });
 
-v1TrackRoutes.get("/:id/pipeline", (c) => {
+v1TrackRoutes.get("/:id/pipeline", async (c) => {
   const id = c.req.param("id");
   const lang = c.req.query("lang");
 
@@ -210,11 +210,22 @@ v1TrackRoutes.get("/:id/pipeline", (c) => {
     );
   }
 
+  const track = await trackService.findById(id);
+
+  if (!track) {
+    throw new AppError(
+      `Track ${id} not found; ingest it before running the pipeline`,
+      404,
+      true,
+      "NOT_FOUND",
+    );
+  }
+
   return streamSSE(
     c,
     async (stream) => {
       try {
-        for await (const event of pipelineService.run({ targetLanguage: lang, trackId: id })) {
+        for await (const event of pipelineService.run({ targetLanguage: lang, track })) {
           if (stream.aborted || stream.closed) {
             break;
           }

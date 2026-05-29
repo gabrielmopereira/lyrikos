@@ -2,41 +2,23 @@ import type { Lyrics, LyricsResearch, Track, Translation } from "@repo/db";
 
 import { logger } from "@/lib/logger";
 import { AppError } from "@/middleware/error-handler";
-import type { DeezerTrackResponse } from "@/services/deezer.service";
-import { deezerService } from "@/services/deezer.service";
 import { lrclibService } from "@/services/lrclib.service";
 import { lyricsResearchService } from "@/services/lyrics-research.service";
 import { lyricsService } from "@/services/lyrics.service";
-import { trackService } from "@/services/track.service";
 import { translationService } from "@/services/translation.service";
 
-export type PipelinePhase = "lyrics" | "research" | "track" | "translation";
+export type PipelinePhase = "lyrics" | "research" | "translation";
 
 export type PipelinePhaseError = { code: string; message: string };
 
 export type PipelineEvent =
   | { data: Lyrics; phase: "lyrics"; status: "cached" | "done" }
-  | { data: Track; phase: "track"; status: "cached" | "done" }
   | { data: Translation; phase: "translation"; status: "cached" | "done" }
   | { error: PipelinePhaseError; phase: PipelinePhase; status: "failed" }
   | { phase: "research"; status: "cached" | "done" | "started" }
   | { phase: "research"; reason: string; status: "skipped" }
   | { phase: "translation"; reason: string; status: "skipped" }
   | { phase: PipelinePhase; status: "started" };
-
-const deezerTrackToCreateInput = (deezerTrack: DeezerTrackResponse) => ({
-  albumCover: deezerTrack.album.cover_medium,
-  albumId: String(deezerTrack.album.id),
-  albumName: deezerTrack.album.title,
-  artistId: String(deezerTrack.artist.id),
-  artistName: deezerTrack.artist.name,
-  duration: deezerTrack.duration,
-  explicitLyrics: deezerTrack.explicit_lyrics,
-  id: String(deezerTrack.id),
-  isrc: deezerTrack.isrc,
-  shortTitle: deezerTrack.title_short,
-  title: deezerTrack.title,
-});
 
 const toPhaseError = (error: unknown): PipelinePhaseError => {
   if (error instanceof AppError) {
@@ -53,17 +35,11 @@ const toPhaseError = (error: unknown): PipelinePhaseError => {
 export class PipelineService {
   async *run({
     targetLanguage,
-    trackId,
+    track,
   }: {
     targetLanguage: string;
-    trackId: string;
+    track: Track;
   }): AsyncGenerator<PipelineEvent> {
-    const track = yield* this.runTrackPhase(trackId);
-
-    if (!track) {
-      return;
-    }
-
     const lyrics = yield* this.runLyricsPhase(track);
 
     if (!lyrics) {
@@ -95,34 +71,12 @@ export class PipelineService {
     });
   }
 
-  private async *runTrackPhase(trackId: string): AsyncGenerator<PipelineEvent, Track | null> {
-    const existing = await trackService.findById(trackId);
-
-    if (existing) {
-      yield { data: existing, phase: "track", status: "cached" };
-      return existing;
-    }
-
-    yield { phase: "track", status: "started" };
-
-    try {
-      const deezerTrack = await deezerService.getTrack(trackId);
-      const track = await trackService.create(deezerTrackToCreateInput(deezerTrack));
-
-      yield { data: track, phase: "track", status: "done" };
-      return track;
-    } catch (error) {
-      logger.error({ error, trackId }, "Pipeline track phase failed");
-
-      yield { error: toPhaseError(error), phase: "track", status: "failed" };
-      return null;
-    }
-  }
-
   private async *runLyricsPhase(track: Track): AsyncGenerator<PipelineEvent, Lyrics | null> {
     const existing = await lyricsService.findByTrack(track.id);
 
-    if (existing) {
+    const isNew = !existing;
+
+    if (existing && existing.fetchedAt) {
       yield { data: existing, phase: "lyrics", status: "cached" };
       return existing;
     }
@@ -137,7 +91,15 @@ export class PipelineService {
         track.duration,
       );
 
-      const lyrics = await lyricsService.create({ result, trackId: track.id });
+      let lyrics: Lyrics | null = null;
+
+      if (isNew) {
+        lyrics = await lyricsService.create({ result, trackId: track.id });
+        logger.info({ trackId: track.id }, "Lyrics created successfully");
+      } else {
+        lyrics = await lyricsService.update({ result, trackId: track.id });
+        logger.info({ trackId: track.id }, "Lyrics updated successfully");
+      }
 
       yield { data: lyrics, phase: "lyrics", status: "done" };
       return lyrics;

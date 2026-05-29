@@ -1,26 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  deezerServiceMock,
-  lrclibServiceMock,
-  lyricsResearchServiceMock,
-  lyricsServiceMock,
-  trackServiceMock,
-  translationServiceMock,
-} = vi.hoisted(() => ({
-  deezerServiceMock: { getTrack: vi.fn() },
-  lrclibServiceMock: { getLyrics: vi.fn() },
-  lyricsResearchServiceMock: { findByLyricsId: vi.fn(), generate: vi.fn() },
-  lyricsServiceMock: { create: vi.fn(), findByTrackId: vi.fn() },
-  trackServiceMock: { create: vi.fn(), findById: vi.fn() },
-  translationServiceMock: {
-    findByTrackAndLanguage: vi.fn(),
-    generate: vi.fn(),
-    isLanguagePairRedundant: vi.fn(),
-  },
-}));
+const { lrclibServiceMock, lyricsResearchServiceMock, lyricsServiceMock, translationServiceMock } =
+  vi.hoisted(() => ({
+    lrclibServiceMock: { getLyrics: vi.fn() },
+    lyricsResearchServiceMock: { findByLyricsId: vi.fn(), generate: vi.fn() },
+    lyricsServiceMock: { create: vi.fn(), findByTrack: vi.fn() },
+    translationServiceMock: {
+      findByTrackAndLanguage: vi.fn(),
+      generate: vi.fn(),
+      isLanguagePairRedundant: vi.fn(),
+    },
+  }));
 
-vi.mock("@/services/track.service", () => ({ trackService: trackServiceMock }));
 vi.mock("@/services/lyrics.service", () => ({ lyricsService: lyricsServiceMock }));
 vi.mock("@/services/lyrics-research.service", () => ({
   lyricsResearchService: lyricsResearchServiceMock,
@@ -28,7 +19,6 @@ vi.mock("@/services/lyrics-research.service", () => ({
 vi.mock("@/services/translation.service", () => ({
   translationService: translationServiceMock,
 }));
-vi.mock("@/services/deezer.service", () => ({ deezerService: deezerServiceMock }));
 vi.mock("@/services/lrclib.service", () => ({ lrclibService: lrclibServiceMock }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 vi.mock("@/lib/env", () => ({
@@ -132,40 +122,21 @@ describe("PipelineService.run", () => {
     translationServiceMock.isLanguagePairRedundant.mockReturnValue(false);
   });
 
-  it("emits four cached events when every phase is warm", async () => {
-    trackServiceMock.findById.mockResolvedValue(baseTrack);
-    lyricsServiceMock.findByTrackId.mockResolvedValue(baseLyrics);
+  it("emits three cached events when every phase is warm", async () => {
+    lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
     lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
     translationServiceMock.findByTrackAndLanguage.mockResolvedValue(baseTranslation);
 
-    const events = await collect(service.run({ targetLanguage: "pt-BR", trackId }));
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
 
-    expect(phases(events)).toEqual([
-      "track:cached",
-      "lyrics:cached",
-      "research:cached",
-      "translation:cached",
-    ]);
-    expect(trackServiceMock.create).not.toHaveBeenCalled();
+    expect(phases(events)).toEqual(["lyrics:cached", "research:cached", "translation:cached"]);
     expect(lyricsServiceMock.create).not.toHaveBeenCalled();
     expect(lyricsResearchServiceMock.generate).not.toHaveBeenCalled();
     expect(translationServiceMock.generate).not.toHaveBeenCalled();
   });
 
   it("runs all phases on a fully cold start", async () => {
-    trackServiceMock.findById.mockResolvedValue(null);
-    deezerServiceMock.getTrack.mockResolvedValue({
-      album: { cover_medium: "cover", id: "alb", title: "Album" },
-      artist: { id: "art", name: "Artist" },
-      duration: 200,
-      explicit_lyrics: false,
-      id: trackId,
-      isrc: "isrc",
-      title: "Title",
-      title_short: "Short",
-    });
-    trackServiceMock.create.mockResolvedValue(baseTrack);
-    lyricsServiceMock.findByTrackId.mockResolvedValueOnce(null).mockResolvedValueOnce(baseLyrics);
+    lyricsServiceMock.findByTrack.mockResolvedValueOnce(null).mockResolvedValueOnce(baseLyrics);
     lrclibServiceMock.getLyrics.mockResolvedValue({
       data: { instrumental: false, plainLyrics: "x" },
       kind: "found",
@@ -176,11 +147,9 @@ describe("PipelineService.run", () => {
     translationServiceMock.findByTrackAndLanguage.mockResolvedValue(null);
     translationServiceMock.generate.mockResolvedValue(baseTranslation);
 
-    const events = await collect(service.run({ targetLanguage: "pt-BR", trackId }));
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
 
     expect(phases(events)).toEqual([
-      "track:started",
-      "track:done",
       "lyrics:started",
       "lyrics:done",
       "research:started",
@@ -188,26 +157,19 @@ describe("PipelineService.run", () => {
       "translation:started",
       "translation:done",
     ]);
-    expect(trackServiceMock.create).toHaveBeenCalledOnce();
     expect(lyricsServiceMock.create).toHaveBeenCalledOnce();
     expect(lyricsResearchServiceMock.generate).toHaveBeenCalledOnce();
     expect(translationServiceMock.generate).toHaveBeenCalledOnce();
   });
 
   it("skips translation when source and target languages are mutually intelligible", async () => {
-    trackServiceMock.findById.mockResolvedValue(baseTrack);
-    lyricsServiceMock.findByTrackId.mockResolvedValue(baseLyrics);
+    lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
     lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
     translationServiceMock.isLanguagePairRedundant.mockReturnValue(true);
 
-    const events = await collect(service.run({ targetLanguage: "en-GB", trackId }));
+    const events = await collect(service.run({ targetLanguage: "en-GB", track: baseTrack }));
 
-    expect(phases(events)).toEqual([
-      "track:cached",
-      "lyrics:cached",
-      "research:cached",
-      "translation:skipped",
-    ]);
+    expect(phases(events)).toEqual(["lyrics:cached", "research:cached", "translation:skipped"]);
     const translation = events.find((e) => e.phase === "translation");
     expect(translation).toMatchObject({
       reason: "languages_mutually_intelligible",
@@ -218,17 +180,11 @@ describe("PipelineService.run", () => {
   });
 
   it("skips research and translation when lyrics are NOT_FOUND", async () => {
-    trackServiceMock.findById.mockResolvedValue(baseTrack);
-    lyricsServiceMock.findByTrackId.mockResolvedValue({ ...baseLyrics, status: "NOT_FOUND" });
+    lyricsServiceMock.findByTrack.mockResolvedValue({ ...baseLyrics, status: "NOT_FOUND" });
 
-    const events = await collect(service.run({ targetLanguage: "pt-BR", trackId }));
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
 
-    expect(phases(events)).toEqual([
-      "track:cached",
-      "lyrics:cached",
-      "research:skipped",
-      "translation:skipped",
-    ]);
+    expect(phases(events)).toEqual(["lyrics:cached", "research:skipped", "translation:skipped"]);
     const research = events.find((e) => e.phase === "research");
     const translation = events.find((e) => e.phase === "translation");
     expect(research).toMatchObject({ reason: "lyrics_not_found", status: "skipped" });
@@ -236,15 +192,14 @@ describe("PipelineService.run", () => {
   });
 
   it("emits translation:failed and stops on AppError from translation service", async () => {
-    trackServiceMock.findById.mockResolvedValue(baseTrack);
-    lyricsServiceMock.findByTrackId.mockResolvedValue(baseLyrics);
+    lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
     lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
     translationServiceMock.findByTrackAndLanguage.mockResolvedValue(null);
     translationServiceMock.generate.mockRejectedValue(
       new AppError("upstream broken", 502, true, "TRANSLATION_UPSTREAM_ERROR"),
     );
 
-    const events = await collect(service.run({ targetLanguage: "pt-BR", trackId }));
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
 
     expect(phases(events).at(-1)).toBe("translation:failed");
     const failed = events.at(-1);
@@ -253,17 +208,5 @@ describe("PipelineService.run", () => {
       phase: "translation",
       status: "failed",
     });
-  });
-
-  it("aborts after track:failed without proceeding", async () => {
-    trackServiceMock.findById.mockResolvedValue(null);
-    deezerServiceMock.getTrack.mockRejectedValue(
-      new AppError("track not found", 404, true, "NOT_FOUND"),
-    );
-
-    const events = await collect(service.run({ targetLanguage: "pt-BR", trackId }));
-
-    expect(phases(events)).toEqual(["track:started", "track:failed"]);
-    expect(lyricsServiceMock.findByTrackId).not.toHaveBeenCalled();
   });
 });
