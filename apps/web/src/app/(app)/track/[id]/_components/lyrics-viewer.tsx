@@ -11,6 +11,22 @@ import type { LyricRow } from "@/lib/lyrics";
 
 import { useLanguage } from "./language-provider";
 
+const EmptyRow = ({
+  className,
+  index,
+  length,
+}: {
+  className?: string;
+  index: number;
+  length: number;
+}) => {
+  if (index + 1 === length) {
+    return null;
+  }
+
+  return <li aria-hidden className={cn("h-5", className)} />;
+};
+
 const TranslationNote = ({ className, note }: { className?: string; note?: string | null }) => {
   if (!note) {
     return null;
@@ -37,7 +53,7 @@ const StackedView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) =
   <ol className="flex flex-col gap-5">
     {rows.map((row) => {
       if (row.original === "") {
-        return <li aria-hidden className="h-2" key={row.index} />;
+        return <EmptyRow index={row.index} key={row.index} length={rows.length} />;
       }
 
       const segment = segmentByIndex.get(row.index);
@@ -73,17 +89,18 @@ const StackedView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) =
 const SideView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) => (
   <ol
     className={cn(
-      "mt-4 grid items-baseline gap-x-8 gap-y-4",
+      "mt-3 grid items-baseline gap-x-8 gap-y-3",
       showTimes ? "grid-cols-[1fr_auto_1fr]" : "grid-cols-2",
     )}
   >
     {rows.map((row) => {
       if (row.original === "") {
         return (
-          <li
-            aria-hidden
-            className={showTimes ? "col-span-3 h-2" : "col-span-2 h-2"}
+          <EmptyRow
+            className={showTimes ? "col-span-3" : "col-span-2"}
+            index={row.index}
             key={row.index}
+            length={rows.length}
           />
         );
       }
@@ -115,10 +132,10 @@ const SideView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) => (
 );
 
 const OriginalView = ({ rows, showTimes }: ViewProps) => (
-  <ol className="flex flex-col gap-7">
+  <ol className="flex flex-col gap-3">
     {rows.map((row) => {
       if (row.original === "") {
-        return <li aria-hidden className="h-2" key={row.index} />;
+        return <EmptyRow index={row.index} key={row.index} length={rows.length} />;
       }
 
       return (
