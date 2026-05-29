@@ -5,12 +5,18 @@ import { notFound } from "next/navigation";
 
 import type { Track, Lyrics, Translation } from "@/lib/api";
 import { getTrackView } from "@/lib/api";
-import { buildLanguageFromCode, DEFAULT_TARGET, TARGET_LANGUAGE_COOKIE } from "@/lib/language";
+import {
+  areLanguageTagsMutuallyIntelligible,
+  buildLanguageFromCode,
+  DEFAULT_TARGET,
+  TARGET_LANGUAGE_COOKIE,
+} from "@/lib/language";
 import { formatDuration } from "@/lib/lyrics";
 
 import { LanguageProvider } from "./_components/language-provider";
 import LanguageSelector from "./_components/language-selector";
 import LyricsViewer from "./_components/lyrics-viewer";
+import PipelineViewer from "./_components/pipeline-viewer";
 
 const Header = ({ track }: { track: Track }) => (
   <header className="flex items-start gap-8">
@@ -25,10 +31,15 @@ const Header = ({ track }: { track: Track }) => (
     <div className="flex min-w-0 flex-1 flex-col gap-2 self-end">
       <h1 className="font-serif text-6xl leading-none font-medium tracking-tight">{track.title}</h1>
 
-      <span className="flex items-baseline gap-4">
-        <p className="inline font-serif text-2xl text-primary italic">{track.artistName}</p>
-        <p className="inline font-mono text-[11px] tracking-[0.18em] text-marble-dim uppercase">
-          {track.albumName} · {formatDuration(track.duration)}
+      <span className="flex items-baseline gap-4 *:inline">
+        <p className="font-serif text-2xl text-primary italic">{track.artistName}</p>
+
+        <p className="truncate font-mono text-xs tracking-widest text-nowrap text-marble-dim uppercase">
+          {track.albumName}
+        </p>
+
+        <p className="font-mono text-xs tracking-widest text-nowrap text-marble-dim">
+          · {formatDuration(track.duration)}
         </p>
       </span>
     </div>
@@ -41,7 +52,7 @@ type View =
   | { kind: "ready"; lyrics: Lyrics; translation: Translation }
   | { kind: "lyrics-only"; lyrics: Lyrics }
   | { kind: "no-lyrics"; reason: "instrumental" | "not-found" }
-  | { kind: "pipeline"; start: "lyrics" | "research" | "translate"; trackId: string };
+  | { kind: "pipeline"; trackId: string };
 
 const defineView = (
   lyrics: Lyrics | null,
@@ -52,7 +63,6 @@ const defineView = (
   if (!lyrics) {
     return {
       kind: "pipeline",
-      start: "lyrics",
       trackId,
     };
   }
@@ -76,7 +86,6 @@ const defineView = (
       default: {
         return {
           kind: "pipeline",
-          start: "lyrics",
           trackId,
         };
       }
@@ -86,15 +95,20 @@ const defineView = (
   if (!lyrics?.language) {
     return {
       kind: "pipeline",
-      start: "research",
       trackId,
     };
   }
 
-  if ((targetLanguageCode !== lyrics?.language && !translation) || !translation) {
+  if (areLanguageTagsMutuallyIntelligible(lyrics.language, targetLanguageCode)) {
+    return {
+      kind: "lyrics-only",
+      lyrics,
+    };
+  }
+
+  if (!translation) {
     return {
       kind: "pipeline",
-      start: "translate",
       trackId,
     };
   }
@@ -121,7 +135,7 @@ const LyricsCardBody = ({ view }: { view: View }) => {
     }
 
     case "pipeline": {
-      return <p>Loading...</p>;
+      return <PipelineViewer trackId={view.trackId} />;
     }
 
     default: {
@@ -157,10 +171,10 @@ const Page = async ({ params }: Props) => {
 
   return (
     <LanguageProvider initialLanguage={lyrics?.language ?? null} initialTarget={initialTarget}>
-      <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-8 p-8">
+      <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-8 p-8">
         <Header track={track} />
 
-        <Card className="min-h-0">
+        <Card className="min-h-0 flex-1">
           <LyricsCardBody view={view} />
         </Card>
       </main>

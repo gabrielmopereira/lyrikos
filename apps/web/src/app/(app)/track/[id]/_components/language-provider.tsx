@@ -33,7 +33,6 @@ type LanguageProviderProps = {
 
 const LanguageProvider = ({ children, initialLanguage, initialTarget }: LanguageProviderProps) => {
   const router = useRouter();
-  const [sourceCode] = useState<string | null>(initialLanguage);
   const [target, setTargetState] = useState<Language>(initialTarget);
 
   const setTarget = (language: Language) => {
@@ -44,7 +43,7 @@ const LanguageProvider = ({ children, initialLanguage, initialTarget }: Language
     });
   };
 
-  const source = sourceCode ? buildLanguageFromCode(sourceCode) : null;
+  const source = initialLanguage ? buildLanguageFromCode(initialLanguage) : null;
 
   return (
     <LanguageContext.Provider value={{ setTarget, source, target }}>

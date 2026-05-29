@@ -76,6 +76,17 @@ const trackViewSchema = z.object({
 });
 type TrackView = z.infer<typeof trackViewSchema>;
 
+const pipelineEventSchema = z.object({
+  data: z.unknown().optional(),
+  error: z.object({ code: z.string(), message: z.string() }).optional(),
+  phase: z.enum(["lyrics", "research", "translation"]),
+  reason: z.string().optional(),
+  status: z.enum(["started", "cached", "done", "skipped", "failed"]),
+});
+type PipelineEvent = z.infer<typeof pipelineEventSchema>;
+type PipelinePhase = PipelineEvent["phase"];
+type PipelineStatus = PipelineEvent["status"];
+
 const getApiUrl = (): string => {
   const url = process.env.NEXT_PUBLIC_API_URL;
 
@@ -169,5 +180,15 @@ const getTrackView = async (
   return trackViewSchema.parse(data);
 };
 
-export type { SearchTrack, SearchResponse, Track, Lyrics, LyricsStatus, Translation };
-export { searchTracks, getTrack, getTrackLyrics, getTrackView };
+export type {
+  SearchTrack,
+  SearchResponse,
+  Track,
+  Lyrics,
+  LyricsStatus,
+  Translation,
+  PipelineEvent,
+  PipelinePhase,
+  PipelineStatus,
+};
+export { searchTracks, getTrack, getTrackLyrics, getTrackView, pipelineEventSchema };

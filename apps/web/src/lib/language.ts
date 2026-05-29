@@ -17,6 +17,23 @@ const LANGUAGES: ReadonlyArray<Language> = [
 
 const DEFAULT_TARGET: Language = { code: "en-US", label: "English (US)" };
 
+// Mirrors apps/api/src/lib/language.ts — keep in sync. Same base language AND
+// that base is in the set means a translation adds no value for lyrics.
+const MUTUALLY_INTELLIGIBLE_BASE_LANGUAGES = new Set(["en", "de", "nl"]);
+
+const areLanguageTagsMutuallyIntelligible = (source: string, target: string): boolean => {
+  try {
+    const sourceLanguage = new Intl.Locale(source).language;
+    const targetLanguage = new Intl.Locale(target).language;
+
+    return (
+      sourceLanguage === targetLanguage && MUTUALLY_INTELLIGIBLE_BASE_LANGUAGES.has(sourceLanguage)
+    );
+  } catch {
+    return false;
+  }
+};
+
 const buildLanguageFromCode = (code: string): Language => {
   const known = LANGUAGES.find((language) => language.code === code);
 
@@ -37,4 +54,10 @@ const buildLanguageFromCode = (code: string): Language => {
   }
 };
 
-export { buildLanguageFromCode, DEFAULT_TARGET, LANGUAGES, TARGET_LANGUAGE_COOKIE };
+export {
+  areLanguageTagsMutuallyIntelligible,
+  buildLanguageFromCode,
+  DEFAULT_TARGET,
+  LANGUAGES,
+  TARGET_LANGUAGE_COOKIE,
+};
