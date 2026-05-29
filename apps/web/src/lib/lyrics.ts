@@ -4,32 +4,44 @@ const LRC_TIME_REGEX = /^\[(\d+):(\d+)(?:[.:]\d+)?\]/v;
 
 type LyricRow = { index: number; original: string; time?: string };
 
-const extractLrcTime = (raw: string): string | undefined => {
+const parseLrcLine = (raw: string): { content: string; time: string } | undefined => {
   const match = LRC_TIME_REGEX.exec(raw);
 
   if (!match) {
     return undefined;
   }
 
-  const [, minutes, seconds] = match;
-  return `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`;
+  const [whole, minutes, seconds] = match;
+  return {
+    content: raw.slice(whole.length).trim(),
+    time: `${Number.parseInt(minutes, 10)}:${seconds.padStart(2, "0")}`,
+  };
 };
 
-// Splits plainLyrics row-by-row (preserving empty rows so indices align with API segments),
-// then attaches timestamps from the same row of syncedLyrics when present.
+// plainLyrics line indices align with translation segment indices (it may include
+// paragraph-break blanks). syncedLyrics omits those blanks and can carry a trailing
+// empty timestamp marker. Sequence-match by walking non-empty content lines in order.
 const parseLyrics = (lyrics: Lyrics): Array<LyricRow> => {
   if (!lyrics.plainLyrics) {
     return [];
   }
 
-  const syncedRows = lyrics.syncedLyrics?.split("\n") ?? [];
+  const syncedTimestamps = (lyrics.syncedLyrics?.split("\n") ?? []).flatMap((raw) => {
+    const parsed = parseLrcLine(raw);
+    return parsed && parsed.content !== "" ? [parsed.time] : [];
+  });
 
+  let cursor = 0;
   return lyrics.plainLyrics.split("\n").map((raw, index) => {
-    const time = extractLrcTime(syncedRows[index] ?? "");
-    const row: LyricRow = { index, original: raw.trim() };
+    const trimmed = raw.trim();
+    const row: LyricRow = { index, original: trimmed };
 
-    if (time) {
-      row.time = time;
+    if (trimmed !== "") {
+      const time = syncedTimestamps[cursor];
+      if (time !== undefined) {
+        row.time = time;
+      }
+      cursor += 1;
     }
 
     return row;
