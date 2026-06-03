@@ -1,6 +1,5 @@
 @import "@repo/ui/globals.css";
 
-
 .cella-bg {
   position: absolute;
   inset: 0;
@@ -18,14 +17,18 @@
   opacity: 0.85;
   transform: scale(1.1);
   background:
-    radial-gradient(120% 100% at 30% 20%,
-      var(--secondary)      0%,
+    radial-gradient(
+      120% 100% at 30% 20%,
+      var(--secondary) 0%,
       var(--secondary-deep) 35%,
-      transparent           65%),
-    radial-gradient(140% 110% at 80% 90%,
-      var(--primary)        0%,
-      var(--primary-deep)   40%,
-      var(--background)     80%);
+      transparent 65%
+    ),
+    radial-gradient(
+      140% 110% at 80% 90%,
+      var(--primary) 0%,
+      var(--primary-deep) 40%,
+      var(--background) 80%
+    );
 }
 
 .cella-bg::after {
@@ -34,7 +37,7 @@
   inset: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in oklab, var(--background) 80%, transparent)  0%,
+    color-mix(in oklab, var(--background) 80%, transparent) 0%,
     color-mix(in oklab, var(--background) 33%, transparent) 22%,
     color-mix(in oklab, var(--background) 40%, transparent) 60%,
     color-mix(in oklab, var(--background) 94%, transparent) 100%

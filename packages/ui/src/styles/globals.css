@@ -55,24 +55,24 @@
   --ring: oklch(0.631 0.134 247.31);
   --primary-deep: oklch(0.469 0.112 250.05);
   --secondary-deep: oklch(0.544 0.118 41.15);
-  --glass:        oklch(0.946 0.018 78.24 / 0.06);
-  --glass-strong: oklch(0.946 0.018 78.24 / 0.10);
+  --glass: oklch(0.946 0.018 78.24 / 0.06);
+  --glass-strong: oklch(0.946 0.018 78.24 / 0.1);
   --glass-border: oklch(0.946 0.018 78.24 / 0.14);
   --marble-faint: oklch(0.946 0.018 78.24 / 0.18);
-  --marble-dim:   oklch(0.946 0.018 78.24 / 0.62);
+  --marble-dim: oklch(0.946 0.018 78.24 / 0.62);
   --chart-1: oklch(0.631 0.134 247.31);
   --chart-2: oklch(0.675 0.134 46.33);
   --chart-3: oklch(0.469 0.112 250.05);
   --chart-4: oklch(0.544 0.118 41.15);
   --chart-5: oklch(0.946 0.018 78.24 / 0.62);
-  --radius:      0.625rem;       /* inputs              */
-  --radius-card: 1.625rem;       /* lyrics card         */
-  --radius-tile: 0.45rem;       /* album art           */
+  --radius: 0.625rem; /* inputs              */
+  --radius-card: 1.625rem; /* lyrics card         */
+  --radius-tile: 0.45rem; /* album art           */
   --sidebar: oklch(0.268 0.056 251.48);
   --sidebar-foreground: oklch(0.946 0.018 78.24);
   --sidebar-primary: oklch(0.631 0.134 247.31);
   --sidebar-primary-foreground: oklch(0.201 0.035 253.05);
-  --sidebar-accent: oklch(0.946 0.018 78.24 / 0.10);
+  --sidebar-accent: oklch(0.946 0.018 78.24 / 0.1);
   --sidebar-accent-foreground: oklch(0.946 0.018 78.24);
   --sidebar-border: oklch(0.946 0.018 78.24 / 0.14);
   --sidebar-ring: oklch(0.631 0.134 247.31);
