@@ -60,11 +60,11 @@ describe("LyricsService", () => {
     vi.clearAllMocks();
   });
 
-  describe("findByTrackId", () => {
+  describe("findByTrack", () => {
     it("should return lyrics when found", async () => {
       vi.mocked(prisma.lyrics.findUnique).mockResolvedValue(mockLyrics as never);
 
-      const result = await lyricsService.findByTrackId(trackId);
+      const result = await lyricsService.findByTrack(trackId);
 
       expect(result).toEqual(mockLyrics);
       expect(prisma.lyrics.findUnique).toHaveBeenCalledWith({ where: { trackId } });
@@ -73,7 +73,7 @@ describe("LyricsService", () => {
     it("should return null when lyrics not found", async () => {
       vi.mocked(prisma.lyrics.findUnique).mockResolvedValue(null as never);
 
-      const result = await lyricsService.findByTrackId("missing");
+      const result = await lyricsService.findByTrack("missing");
 
       expect(result).toBeNull();
     });
@@ -81,8 +81,8 @@ describe("LyricsService", () => {
     it("should throw AppError 500 LYRICS_FETCH_ERROR on database error", async () => {
       vi.mocked(prisma.lyrics.findUnique).mockRejectedValue(new Error("DB connection lost"));
 
-      await expect(lyricsService.findByTrackId(trackId)).rejects.toThrow(AppError);
-      await expect(lyricsService.findByTrackId(trackId)).rejects.toMatchObject({
+      await expect(lyricsService.findByTrack(trackId)).rejects.toThrow(AppError);
+      await expect(lyricsService.findByTrack(trackId)).rejects.toMatchObject({
         code: "LYRICS_FETCH_ERROR",
         statusCode: 500,
       });
