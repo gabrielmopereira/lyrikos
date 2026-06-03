@@ -1,8 +1,13 @@
 import type { Lyrics, LyricsResearch, Track, Translation } from "@repo/db";
 
+import { isUntranslatableBaseLanguage } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/middleware/error-handler";
 import { lrclibService } from "@/services/lrclib.service";
+import {
+  MODEL_ID as RESEARCH_MODEL_ID,
+  PROMPT_VERSION as RESEARCH_PROMPT_VERSION,
+} from "@/services/lyrics-research.prompt";
 import { lyricsResearchService } from "@/services/lyrics-research.service";
 import { lyricsService } from "@/services/lyrics.service";
 import { translationService } from "@/services/translation.service";
@@ -117,7 +122,13 @@ export class PipelineService {
   ): AsyncGenerator<PipelineEvent, LyricsResearch | null> {
     const existing = await lyricsResearchService.findByLyricsId(lyrics.id);
 
-    if (existing) {
+    const isCurrent =
+      existing !== null &&
+      existing.modelId === RESEARCH_MODEL_ID &&
+      existing.promptVersion === RESEARCH_PROMPT_VERSION &&
+      existing.sourceContentHash === lyrics.contentHash;
+
+    if (isCurrent) {
       yield { phase: "research", status: "cached" };
       return existing;
     }
@@ -151,21 +162,20 @@ export class PipelineService {
     targetLanguage: string;
     track: Track;
   }): AsyncGenerator<PipelineEvent> {
-    if (
-      lyrics.language &&
-      translationService.isLanguagePairRedundant(lyrics.language, targetLanguage)
-    ) {
-      yield {
-        phase: "translation",
-        reason: "languages_mutually_intelligible",
-        status: "skipped",
-      };
+    const scope = translationService.resolveScope(lyrics, targetLanguage);
+
+    if (scope.kind === "skip") {
+      const reason = isUntranslatableBaseLanguage(lyrics.language ?? "")
+        ? "no_translatable_content"
+        : "languages_mutually_intelligible";
+
+      yield { phase: "translation", reason, status: "skipped" };
       return;
     }
 
     const existing = await translationService.findByTrackAndLanguage(track.id, targetLanguage);
 
-    if (existing) {
+    if (existing && (await translationService.isCurrent(existing, lyrics, research))) {
       yield { data: existing, phase: "translation", status: "cached" };
       return;
     }
@@ -176,6 +186,7 @@ export class PipelineService {
       const translation = await translationService.generate({
         lyrics,
         research,
+        scope,
         targetLanguage,
         track,
       });

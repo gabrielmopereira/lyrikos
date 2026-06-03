@@ -8,7 +8,8 @@ const { lrclibServiceMock, lyricsResearchServiceMock, lyricsServiceMock, transla
     translationServiceMock: {
       findByTrackAndLanguage: vi.fn(),
       generate: vi.fn(),
-      isLanguagePairRedundant: vi.fn(),
+      isCurrent: vi.fn(),
+      resolveScope: vi.fn(),
     },
   }));
 
@@ -119,7 +120,8 @@ const phases = (events: Array<PipelineEvent>) => events.map((e) => `${e.phase}:$
 describe("PipelineService.run", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    translationServiceMock.isLanguagePairRedundant.mockReturnValue(false);
+    translationServiceMock.resolveScope.mockReturnValue({ kind: "full" });
+    translationServiceMock.isCurrent.mockResolvedValue(true);
   });
 
   it("emits three cached events when every phase is warm", async () => {
@@ -133,6 +135,44 @@ describe("PipelineService.run", () => {
     expect(lyricsServiceMock.create).not.toHaveBeenCalled();
     expect(lyricsResearchServiceMock.generate).not.toHaveBeenCalled();
     expect(translationServiceMock.generate).not.toHaveBeenCalled();
+  });
+
+  it("regenerates research when the cached row is stale (prompt version bump)", async () => {
+    lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
+    lyricsResearchServiceMock.findByLyricsId.mockResolvedValue({
+      ...baseResearch,
+      promptVersion: "research-v0",
+    });
+    lyricsResearchServiceMock.generate.mockResolvedValue(baseResearch);
+    translationServiceMock.findByTrackAndLanguage.mockResolvedValue(baseTranslation);
+
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
+
+    expect(phases(events)).toEqual([
+      "lyrics:cached",
+      "research:started",
+      "research:done",
+      "translation:cached",
+    ]);
+    expect(lyricsResearchServiceMock.generate).toHaveBeenCalledOnce();
+  });
+
+  it("regenerates translation when the cached row is stale (prompt version bump)", async () => {
+    lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
+    lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
+    translationServiceMock.findByTrackAndLanguage.mockResolvedValue(baseTranslation);
+    translationServiceMock.isCurrent.mockResolvedValue(false);
+    translationServiceMock.generate.mockResolvedValue(baseTranslation);
+
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
+
+    expect(phases(events)).toEqual([
+      "lyrics:cached",
+      "research:cached",
+      "translation:started",
+      "translation:done",
+    ]);
+    expect(translationServiceMock.generate).toHaveBeenCalledOnce();
   });
 
   it("runs all phases on a fully cold start", async () => {
@@ -165,7 +205,7 @@ describe("PipelineService.run", () => {
   it("skips translation when source and target languages are mutually intelligible", async () => {
     lyricsServiceMock.findByTrack.mockResolvedValue(baseLyrics);
     lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
-    translationServiceMock.isLanguagePairRedundant.mockReturnValue(true);
+    translationServiceMock.resolveScope.mockReturnValue({ kind: "skip" });
 
     const events = await collect(service.run({ targetLanguage: "en-GB", track: baseTrack }));
 
@@ -176,6 +216,22 @@ describe("PipelineService.run", () => {
       status: "skipped",
     });
     expect(translationServiceMock.findByTrackAndLanguage).not.toHaveBeenCalled();
+    expect(translationServiceMock.generate).not.toHaveBeenCalled();
+  });
+
+  it("skips translation with no_translatable_content when the source language is undetermined", async () => {
+    lyricsServiceMock.findByTrack.mockResolvedValue({ ...baseLyrics, language: "und" });
+    lyricsResearchServiceMock.findByLyricsId.mockResolvedValue(baseResearch);
+    translationServiceMock.resolveScope.mockReturnValue({ kind: "skip" });
+
+    const events = await collect(service.run({ targetLanguage: "pt-BR", track: baseTrack }));
+
+    expect(phases(events)).toEqual(["lyrics:cached", "research:cached", "translation:skipped"]);
+    const translation = events.find((e) => e.phase === "translation");
+    expect(translation).toMatchObject({
+      reason: "no_translatable_content",
+      status: "skipped",
+    });
     expect(translationServiceMock.generate).not.toHaveBeenCalled();
   });
 
