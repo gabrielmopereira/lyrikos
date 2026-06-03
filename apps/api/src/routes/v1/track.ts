@@ -186,7 +186,24 @@ v1TrackRoutes.openapi(trackViewRoute, async (c) => {
   const lyrics: Lyrics | null = await lyricsService.findByTrack(id);
 
   const rawTranslation = await translationService.findByTrackAndLanguage(id, lang);
-  const translation: Translation | null = rawTranslation && translationSchema.parse(rawTranslation);
+
+  let translation: Translation | null = null;
+
+  if (rawTranslation) {
+    const parsed = translationSchema.safeParse(rawTranslation);
+
+    if (parsed.success) {
+      translation = parsed.data;
+    } else {
+      // A pre-v3 row no longer satisfies the current segment contract. Treat it as
+      // absent so the client falls back to the pipeline and regenerates at the
+      // current prompt version instead of surfacing a 500.
+      logger.warn(
+        { error: parsed.error, lang, trackId: id },
+        "Stored translation failed the current schema; treating as missing",
+      );
+    }
+  }
 
   const response = {
     lyrics,
