@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 
+import { cn } from "@repo/ui/lib/utils";
 import type { Metadata, Viewport } from "next";
 import { Inter as interFont } from "next/font/google";
 import type { ReactNode } from "react";
@@ -115,8 +116,8 @@ const RootLayout = ({ children }: { children: ReactNode }) => {
         <meta content="1; mode=block" httpEquiv="X-XSS-Protection" />
       </head>
 
-      <body className={inter.className} suppressHydrationWarning>
-        <div className="relative text-foreground">
+      <body className={cn(inter.className)} suppressHydrationWarning>
+        <div className="relative font-sans text-foreground">
           <div className="cella-bg" />
 
           <div className="relative z-10">{children}</div>
