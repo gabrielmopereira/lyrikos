@@ -8,7 +8,7 @@ const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   return children;
 };
 
-function ToastViewport({ className, ...props }: ComponentProps<"ol">) {
+const ToastViewport = ({ className, ...props }: ComponentProps<"ol">) => {
   return (
     <ol
       className={cn(
@@ -19,7 +19,7 @@ function ToastViewport({ className, ...props }: ComponentProps<"ol">) {
       {...props}
     />
   );
-}
+};
 ToastViewport.displayName = "ToastViewport";
 
 const toastVariants = cva(
@@ -54,6 +54,9 @@ const Toast = ({
     <li
       className={cn(toastVariants({ variant }), className)}
       data-state={open ? "open" : "closed"}
+      // The toast is a list item in the viewport <ol>; role="status" makes it a
+      // polite live region without changing the element to <output>.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="status"
       {...props}
     />

@@ -17,6 +17,9 @@ const InputGroup = ({ className, ...props }: ComponentProps<"div">) => {
         className,
       )}
       data-slot="input-group"
+      // Visual wrapper grouping a control with its addons; <fieldset> et al.
+      // would impose unwanted semantics/styling, so role="group" stays.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="group"
       {...props}
     />
@@ -50,7 +53,7 @@ const InputGroupAddon = ({
   return (
     // Mouse-convenience: clicking the addon focuses the sibling input.
     // Keyboard users tab directly to the input — no key handler is meaningful here.
-    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <div
       className={cn(inputGroupAddonVariants({ align }), className)}
       data-align={align}
@@ -62,6 +65,8 @@ const InputGroupAddon = ({
 
         e.currentTarget.parentElement?.querySelector("input")?.focus();
       }}
+      // Visual addon container; keep role="group" rather than a semantic tag.
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="group"
       {...props}
     />
