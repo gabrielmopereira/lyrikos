@@ -88,6 +88,7 @@ const validNotes = {
   mood: ["happy"],
   perspective: { addressee: null, tense: "present", voice: "first" },
   references: [],
+  secondaryLanguages: [],
   songContext: "",
   summary: "A two-sentence summary.",
   themes: ["love"],
@@ -219,7 +220,7 @@ describe("LyricsResearchService", () => {
       expect(createCall?.data.generatedAt).toBeInstanceOf(Date);
     });
 
-    it("backfills Lyrics.language when null and detectedLanguage is present", async () => {
+    it("backfills Lyrics language fields from the research output", async () => {
       vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
       generateTextMock.mockResolvedValue({ output: validNotes });
       vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);
@@ -227,20 +228,108 @@ describe("LyricsResearchService", () => {
       await service.generate({ lyrics: baseLyrics, track: baseTrack });
 
       expect(prisma.lyrics.update).toHaveBeenCalledWith({
-        data: { language: "en-US" },
+        data: { language: "en-US", secondaryLanguages: [] },
         where: { id: lyricsId },
       });
     });
 
-    it("does not overwrite Lyrics.language when already set", async () => {
+    it("overwrites Lyrics language fields even when already set (AI is authoritative)", async () => {
       const lyrics = { ...baseLyrics, language: "pt-BR" } as Lyrics;
+      const notes = {
+        ...validNotes,
+        detectedLanguage: "en-GB",
+        secondaryLanguages: [{ language: "fr-FR", lineIndices: [1] }],
+      };
       vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
-      generateTextMock.mockResolvedValue({ output: validNotes });
+      generateTextMock.mockResolvedValue({ output: notes });
       vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);
 
       await service.generate({ lyrics, track: baseTrack });
 
-      expect(prisma.lyrics.update).not.toHaveBeenCalled();
+      expect(prisma.lyrics.update).toHaveBeenCalledWith({
+        data: {
+          language: "en-GB",
+          secondaryLanguages: [{ language: "fr-FR", lineIndices: [1] }],
+        },
+        where: { id: lyricsId },
+      });
+    });
+
+    it("sanitizes out-of-range line indices before persisting and backfilling", async () => {
+      // baseLyrics.plainLyrics has 2 lines, so valid indices are 0 and 1.
+      const notes = {
+        ...validNotes,
+        idioms: [{ figurative: "f", lineIndex: 5, literal: "l", register: "slang", surface: "s" }],
+        references: [
+          { confidence: "high", explanation: "e", lineIndex: 1, surface: "s", type: "place" },
+        ],
+        secondaryLanguages: [{ language: "fr-FR", lineIndices: [1, 9] }],
+      };
+      vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: notes });
+      vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);
+
+      await service.generate({ lyrics: baseLyrics, track: baseTrack });
+
+      const createCall = vi.mocked(prisma.lyricsResearch.create).mock.calls[0]?.[0];
+      const storedNotes = createCall?.data.notes as {
+        idioms: Array<{ lineIndex: number | null }>;
+        references: Array<{ lineIndex: number | null }>;
+        secondaryLanguages: Array<{ lineIndices: Array<number> }>;
+      };
+      expect(storedNotes.references[0]?.lineIndex).toBe(1); // in range, kept
+      expect(storedNotes.idioms[0]?.lineIndex).toBeNull(); // 5 out of range, nulled
+      expect(storedNotes.secondaryLanguages[0]?.lineIndices).toEqual([1]); // 9 dropped
+
+      // Backfill uses the sanitized secondaryLanguages, not the raw output.
+      expect(prisma.lyrics.update).toHaveBeenCalledWith({
+        data: { language: "en-US", secondaryLanguages: [{ language: "fr-FR", lineIndices: [1] }] },
+        where: { id: lyricsId },
+      });
+    });
+
+    it("does not expand detectedLanguage 'und' to a region (R3: instrumental/vocalise)", async () => {
+      const notes = { ...validNotes, detectedLanguage: "und", secondaryLanguages: [] };
+      vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: notes });
+      vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);
+
+      await service.generate({ lyrics: baseLyrics, track: baseTrack });
+
+      // 'und' must NOT become 'en-US' via likely-subtags expansion.
+      expect(prisma.lyrics.update).toHaveBeenCalledWith({
+        data: { language: "und", secondaryLanguages: [] },
+        where: { id: lyricsId },
+      });
+    });
+
+    it("drops a secondaryLanguages entry echoing the primary and collapses duplicates (R4)", async () => {
+      // baseLyrics.plainLyrics has 2 lines; detectedLanguage base is 'en'.
+      const notes = {
+        ...validNotes,
+        detectedLanguage: "en-US",
+        secondaryLanguages: [
+          { language: "en-GB", lineIndices: [0] }, // echoes primary base 'en' -> dropped
+          { language: "fr-FR", lineIndices: [1] }, // kept
+          { language: "fr-CA", lineIndices: [1] }, // duplicate base 'fr' -> collapsed
+        ],
+      };
+      vi.mocked(prisma.lyricsResearch.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: notes });
+      vi.mocked(prisma.lyricsResearch.create).mockResolvedValue(existingFresh as never);
+
+      await service.generate({ lyrics: baseLyrics, track: baseTrack });
+
+      const createCall = vi.mocked(prisma.lyricsResearch.create).mock.calls[0]?.[0];
+      const storedNotes = createCall?.data.notes as {
+        secondaryLanguages: Array<{ language: string; lineIndices: Array<number> }>;
+      };
+      expect(storedNotes.secondaryLanguages).toEqual([{ language: "fr-FR", lineIndices: [1] }]);
+
+      expect(prisma.lyrics.update).toHaveBeenCalledWith({
+        data: { language: "en-US", secondaryLanguages: [{ language: "fr-FR", lineIndices: [1] }] },
+        where: { id: lyricsId },
+      });
     });
   });
 

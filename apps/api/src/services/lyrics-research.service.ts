@@ -1,10 +1,10 @@
 import { google } from "@ai-sdk/google";
 import { prisma } from "@repo/db";
-import type { Lyrics, LyricsResearch, Prisma } from "@repo/db";
+import type { Lyrics, LyricsResearch } from "@repo/db";
 import { Output, generateText, stepCountIs } from "ai";
 
 import { describeAiError } from "@/lib/ai-errors";
-import { canonicalizeLanguageTag } from "@/lib/language";
+import { ensureRegionSubtag, getBaseLanguage, isUntranslatableBaseLanguage } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
 import {
@@ -14,6 +14,49 @@ import {
   buildUserPrompt,
   researchNotesSchema,
 } from "@/services/lyrics-research.prompt";
+import type { ResearchNotes } from "@/services/lyrics-research.prompt";
+
+const isLineIndexInRange = (value: number, lineCount: number): boolean =>
+  Number.isInteger(value) && value >= 0 && value < lineCount;
+
+const clampLineAnchor = (value: number | null, lineCount: number): number | null =>
+  value !== null && isLineIndexInRange(value, lineCount) ? value : null;
+
+const sanitizeResearchLineIndices = (notes: ResearchNotes, lineCount: number): ResearchNotes => {
+  const primaryBase = getBaseLanguage(notes.detectedLanguage);
+  const seenSecondaryBases = new Set<string>();
+
+  return {
+    ...notes,
+    idioms: notes.idioms.map((item) => ({
+      ...item,
+      lineIndex: clampLineAnchor(item.lineIndex, lineCount),
+    })),
+    references: notes.references.map((item) => ({
+      ...item,
+      lineIndex: clampLineAnchor(item.lineIndex, lineCount),
+    })),
+    secondaryLanguages: notes.secondaryLanguages
+      .map((entry) => ({
+        ...entry,
+        lineIndices: entry.lineIndices.filter((index) => isLineIndexInRange(index, lineCount)),
+      }))
+      .filter((entry) => {
+        const base = getBaseLanguage(entry.language);
+
+        if (base === primaryBase || seenSecondaryBases.has(base)) {
+          return false;
+        }
+
+        seenSecondaryBases.add(base);
+        return true;
+      }),
+    wordplay: notes.wordplay.map((item) => ({
+      ...item,
+      lineIndex: clampLineAnchor(item.lineIndex, lineCount),
+    })),
+  };
+};
 
 export class LyricsResearchService {
   async findByLyricsId(lyricsId: string) {
@@ -63,7 +106,7 @@ export class LyricsResearchService {
       return existing;
     }
 
-    let notes;
+    let notes: ResearchNotes;
 
     try {
       const { output } = await generateText({
@@ -98,6 +141,8 @@ export class LyricsResearchService {
       throw new AppError("Lyrics research failed", 502, true, "RESEARCH_UPSTREAM_ERROR");
     }
 
+    notes = sanitizeResearchLineIndices(notes, plainLyrics.split("\n").length);
+
     const { summary, ...restNotes } = notes;
     const generatedAt = new Date();
 
@@ -109,7 +154,7 @@ export class LyricsResearchService {
             data: {
               generatedAt,
               modelId: MODEL_ID,
-              notes: restNotes as Prisma.InputJsonValue,
+              notes: restNotes,
               promptVersion: PROMPT_VERSION,
               sourceContentHash,
               summary,
@@ -121,7 +166,7 @@ export class LyricsResearchService {
               generatedAt,
               lyricsId: lyrics.id,
               modelId: MODEL_ID,
-              notes: restNotes as Prisma.InputJsonValue,
+              notes: restNotes,
               promptVersion: PROMPT_VERSION,
               sourceContentHash,
               summary,
@@ -144,16 +189,23 @@ export class LyricsResearchService {
       throw new AppError("Failed to persist lyrics research", 500, false, "RESEARCH_PERSIST_ERROR");
     }
 
-    if (!lyrics.language && notes.detectedLanguage) {
+    if (notes.detectedLanguage) {
+      const language = isUntranslatableBaseLanguage(notes.detectedLanguage)
+        ? "und"
+        : ensureRegionSubtag(notes.detectedLanguage);
+
       try {
         await prisma.lyrics.update({
-          data: { language: canonicalizeLanguageTag(notes.detectedLanguage) },
+          data: {
+            language,
+            secondaryLanguages: notes.secondaryLanguages,
+          },
           where: { id: lyrics.id },
         });
       } catch (error) {
         logger.warn(
           { detectedLanguage: notes.detectedLanguage, error, lyricsId: lyrics.id },
-          "Failed to backfill Lyrics.language",
+          "Failed to backfill Lyrics language fields",
         );
       }
     }
