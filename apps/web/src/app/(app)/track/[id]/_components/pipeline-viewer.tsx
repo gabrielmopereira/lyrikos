@@ -77,6 +77,7 @@ const SKIP_MESSAGES: Record<string, string> = {
   languages_mutually_intelligible: "already in your language",
   lyrics_instrumental: "instrumental — nothing to translate",
   lyrics_not_found: "no lyrics to translate",
+  no_translatable_content: "nothing to translate",
 };
 
 const eventToMessage = (event: PipelineEvent): string => {

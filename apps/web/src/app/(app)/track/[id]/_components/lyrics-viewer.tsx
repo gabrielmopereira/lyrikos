@@ -27,14 +27,27 @@ const EmptyRow = ({
   return <li aria-hidden className={cn("h-5", className)} />;
 };
 
-const TranslationNote = ({ className, note }: { className?: string; note?: string | null }) => {
+// Two note kinds render distinctly: "Context" carries research-anchored trivia
+// (consistent across languages), "Translator's note" carries the per-language
+// rendering rationale (primary accent).
+const TRANSLATOR_NOTE_ACCENT = "border-l-primary *:data-[slot=alert-title]:text-primary";
+
+const SegmentNote = ({
+  className,
+  label,
+  note,
+}: {
+  className?: string;
+  label: string;
+  note?: string | null;
+}) => {
   if (!note) {
     return null;
   }
 
   return (
     <Alert className={className} variant="note">
-      <AlertTitle>Note</AlertTitle>
+      <AlertTitle>{label}</AlertTitle>
       <AlertDescription>{note}</AlertDescription>
     </Alert>
   );
@@ -78,7 +91,12 @@ const StackedView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) =
               </p>
             ) : null}
 
-            <TranslationNote className="mt-3" note={segment?.note} />
+            <SegmentNote className="mt-3" label="Context" note={segment?.contextNote} />
+            <SegmentNote
+              className={cn("mt-3", TRANSLATOR_NOTE_ACCENT)}
+              label="Translator's note"
+              note={segment?.translationNote}
+            />
           </div>
         </li>
       );
@@ -121,9 +139,15 @@ const SideView = ({ rows, segmentByIndex, showTimes }: TranslatedViewProps) => (
             {segment?.translated ?? ""}
           </p>
 
-          <TranslationNote
+          <SegmentNote
             className={showTimes ? "col-span-3" : "col-span-2"}
-            note={segment?.note}
+            label="Context"
+            note={segment?.contextNote}
+          />
+          <SegmentNote
+            className={cn(showTimes ? "col-span-3" : "col-span-2", TRANSLATOR_NOTE_ACCENT)}
+            label="Translator's note"
+            note={segment?.translationNote}
           />
         </li>
       );
@@ -173,7 +197,9 @@ const LyricsViewer = ({ lyrics, translation }: LyricsViewerProps) => {
   const showTimes = rows.some((row) => row.time !== undefined);
 
   const lineCount = rows.filter((row) => row.original !== "").length;
-  const noteCount = translation?.segments.filter((segment) => segment.note).length ?? 0;
+  const noteCount =
+    translation?.segments.filter((segment) => segment.contextNote || segment.translationNote)
+      .length ?? 0;
 
   return (
     <Tabs className="min-h-0 flex-col" defaultValue={showOnlyOriginal ? "original" : "stacked"}>

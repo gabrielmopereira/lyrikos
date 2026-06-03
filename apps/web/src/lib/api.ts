@@ -57,10 +57,10 @@ const translationSchema = z.object({
   language: z.string(),
   segments: z.array(
     z.object({
+      contextNote: z.string().nullable(),
       index: z.number().int().nonnegative(),
-      note: z.string().nullable(),
-      original: z.string(),
-      translated: z.string(),
+      translated: z.string().nullable(),
+      translationNote: z.string().nullable(),
     }),
   ),
   selfScore: z.number().nullable(),
