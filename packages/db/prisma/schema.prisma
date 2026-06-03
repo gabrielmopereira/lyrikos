@@ -71,10 +71,11 @@ model Lyrics {
 
   status LyricsStatus @default(PENDING)
 
-  language     String?
-  plainLyrics  String? @db.Text
-  syncedLyrics String? @db.Text
-  contentHash  String?
+  language           String?
+  secondaryLanguages Json?
+  plainLyrics        String? @db.Text
+  syncedLyrics       String? @db.Text
+  contentHash        String?
 
   lastAttemptAt DateTime?
   attemptCount  Int       @default(0)
@@ -130,10 +131,11 @@ model Translation {
   segments       Json
   translatorNote String? @db.Text
 
-  modelId           String
-  promptVersion     String
-  sourceContentHash String
-  researchVersion   String
+  modelId            String
+  promptVersion      String
+  sourceContentHash  String
+  researchVersion    String
+  sourceLanguageBase String?
 
   status    TranslationStatus @default(FRESH)
   selfScore Float?
