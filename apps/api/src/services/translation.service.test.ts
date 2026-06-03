@@ -42,10 +42,12 @@ vi.mock("@/lib/logger", () => ({
 import { prisma } from "@repo/db";
 import type { Lyrics, LyricsResearch } from "@repo/db";
 
+import { logger } from "@/lib/logger";
 import { computeResearchVersion } from "@/lib/version";
 import { AppError } from "@/middleware/error-handler";
 
 import { MODEL_ID, PROMPT_VERSION } from "./translation.prompt";
+import type { TranslationOutput } from "./translation.prompt";
 import { TranslationService } from "./translation.service";
 
 const service = new TranslationService();
@@ -97,16 +99,35 @@ const baseResearch = {
   updatedAt: new Date("2024-01-02"),
 } as unknown as LyricsResearch;
 
-const buildOutput = () => ({
+const buildOutput = (): TranslationOutput => ({
   segments: [
-    { index: 0, note: null, original: "Line one", translated: "Linha um" },
-    { index: 1, note: null, original: "Line two", translated: "Linha dois" },
-    { index: 2, note: null, original: "", translated: "" },
-    { index: 3, note: null, original: "Line four", translated: "Linha quatro" },
+    { contextNote: null, index: 0, translated: "Linha um", translationNote: null },
+    { contextNote: null, index: 1, translated: "Linha dois", translationNote: null },
+    { contextNote: null, index: 2, translated: "", translationNote: null },
+    { contextNote: null, index: 3, translated: "Linha quatro", translationNote: null },
   ],
   selfScore: 0.9,
   translatorNote: null,
 });
+
+// Research that anchors a reference to a specific line, so the translation must
+// localize it into that line's contextNote (N1).
+const researchWithAnchor = (lineIndex: number) =>
+  ({
+    ...baseResearch,
+    notes: {
+      ...(baseResearch.notes as object),
+      references: [
+        {
+          confidence: "high",
+          explanation: "A real place.",
+          lineIndex,
+          surface: "Line",
+          type: "place",
+        },
+      ],
+    },
+  }) as unknown as LyricsResearch;
 
 const buildExistingTranslation = async () => ({
   createdAt: new Date("2024-01-03"),
@@ -120,6 +141,7 @@ const buildExistingTranslation = async () => ({
   segments: buildOutput().segments,
   selfScore: 0.9,
   sourceContentHash: contentHash,
+  sourceLanguageBase: "en",
   status: "FRESH",
   trackId,
   translatorNote: null,
@@ -191,6 +213,18 @@ describe("TranslationService", () => {
         statusCode: 400,
       });
     });
+
+    it("throws RESEARCH_NOTES_INVALID when stored research notes are malformed", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      const research = { ...baseResearch, notes: null } as unknown as LyricsResearch;
+
+      await expect(callGenerate({ research })).rejects.toMatchObject({
+        code: "RESEARCH_NOTES_INVALID",
+        statusCode: 500,
+      });
+      // Fails before the AI call — no wasted generation on ungrounded input.
+      expect(generateTextMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("generate (idempotency)", () => {
@@ -253,6 +287,45 @@ describe("TranslationService", () => {
 
       expect(prisma.translation.update).toHaveBeenCalledOnce();
     });
+
+    it("regenerates when the source base language changes", async () => {
+      const existing = await buildExistingTranslation();
+      const stale = { ...existing, sourceLanguageBase: "es" };
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(stale as never);
+      generateTextMock.mockResolvedValue({ output: buildOutput() });
+      vi.mocked(prisma.translation.update).mockResolvedValue(stale as never);
+
+      await callGenerate();
+
+      expect(prisma.translation.update).toHaveBeenCalledOnce();
+    });
+
+    it("stays current when only the region differs (base unchanged)", async () => {
+      // Existing row was made from es-ES; lyrics now read es-MX. Base is still
+      // 'es', so the translation must NOT regenerate.
+      const existing = await buildExistingTranslation();
+      const sameBase = { ...existing, sourceLanguageBase: "es" };
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(sameBase as never);
+
+      const result = await callGenerate({
+        lyrics: { ...baseLyrics, language: "es-MX" } as Lyrics,
+        targetLanguage: "pt-BR",
+      });
+
+      expect(result).toEqual(sameBase);
+      expect(generateTextMock).not.toHaveBeenCalled();
+    });
+
+    it("treats a legacy null sourceLanguageBase as current (no force regenerate)", async () => {
+      const existing = await buildExistingTranslation();
+      const legacy = { ...existing, sourceLanguageBase: null };
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(legacy as never);
+
+      const result = await callGenerate();
+
+      expect(result).toEqual(legacy);
+      expect(generateTextMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("generate (fresh)", () => {
@@ -306,6 +379,154 @@ describe("TranslationService", () => {
         ttl: "1h",
         type: "ephemeral",
       });
+    });
+
+    it("caches the invariant user-message prefix and isolates target language in the suffix", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: buildOutput() });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate();
+
+      const callArgs = generateTextMock.mock.calls[0]?.[0];
+      const content = callArgs?.messages?.[0]?.content;
+      expect(Array.isArray(content)).toBe(true);
+
+      const [prefixPart, suffixPart] = content;
+      // The large, per-track-invariant block carries the cache breakpoint so it
+      // is reused across every target language for the same track.
+      expect(prefixPart?.providerOptions?.anthropic?.cacheControl).toEqual({
+        ttl: "1h",
+        type: "ephemeral",
+      });
+      expect(prefixPart?.text).toContain("## Research notes");
+      // The only varying instruction lives after the cache breakpoint.
+      expect(suffixPart?.providerOptions).toBeUndefined();
+      expect(suffixPart?.text).toContain("pt-BR");
+      expect(prefixPart?.text).not.toContain("Target language");
+    });
+
+    it("persists the source base language on the new row", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: buildOutput() });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate();
+
+      const createCall = vi.mocked(prisma.translation.create).mock.calls[0]?.[0];
+      expect(createCall?.data.sourceLanguageBase).toBe("en");
+    });
+
+    it("builds a partial-mode suffix listing foreign indices while keeping the cached prefix", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: buildOutput() });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate({ scope: { kind: "partial", lineIndices: [3] } });
+
+      const callArgs = generateTextMock.mock.calls[0]?.[0];
+      const content = callArgs?.messages?.[0]?.content;
+      const [prefixPart, suffixPart] = content;
+      // Suffix carries the partial instruction with the specific indices.
+      expect(suffixPart?.text).toContain("[3]");
+      expect(suffixPart?.text).toContain("contextNote");
+      // Prefix is byte-identical to full mode, so the prompt cache still hits.
+      expect(prefixPart?.text).toContain("## Research notes");
+      expect(prefixPart?.text).not.toContain("Target language");
+    });
+
+    it("forces passthrough lines to null and keeps only the foreign line translated", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      // Model echoes the original for passthrough lines; the service must override it.
+      const echoed = buildOutput();
+      echoed.segments[0] = { ...echoed.segments[0]!, translated: "Line one" };
+      generateTextMock.mockResolvedValue({ output: echoed });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate({ scope: { kind: "partial", lineIndices: [3] } });
+
+      const createCall = vi.mocked(prisma.translation.create).mock.calls[0]?.[0];
+      const segments = createCall?.data.segments as Array<{
+        index: number;
+        translated: string | null;
+      }>;
+      // Foreign line keeps its translation; every other line is nulled.
+      expect(segments.find((s) => s.index === 3)?.translated).toBe("Linha quatro");
+      expect(segments.find((s) => s.index === 0)?.translated).toBeNull();
+      expect(segments.find((s) => s.index === 1)?.translated).toBeNull();
+      expect(segments.find((s) => s.index === 2)?.translated).toBeNull();
+    });
+  });
+
+  describe("generate (context notes)", () => {
+    it("stores the contextNote and does not flag drift when the anchored line has one", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      const output = buildOutput();
+      output.segments[0] = { ...output.segments[0]!, contextNote: "Sobre a cidade" };
+      generateTextMock.mockResolvedValue({ output });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate({ research: researchWithAnchor(0) });
+
+      const createCall = vi.mocked(prisma.translation.create).mock.calls[0]?.[0];
+      const segments = createCall?.data.segments as Array<{
+        contextNote: string | null;
+        index: number;
+      }>;
+      expect(segments.find((s) => s.index === 0)?.contextNote).toBe("Sobre a cidade");
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+    });
+
+    it("warns (without failing) when a research-anchored line returns no contextNote", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      generateTextMock.mockResolvedValue({ output: buildOutput() });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate({ research: researchWithAnchor(1) });
+
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.objectContaining({ missingContextNotes: [1] }),
+        "Translation context-note drift: research-anchored lines missing contextNote",
+      );
+      expect(prisma.translation.create).toHaveBeenCalledOnce();
+    });
+
+    it("strips a contextNote the model spreads onto a non-anchored repeated line", async () => {
+      vi.mocked(prisma.translation.findUnique).mockResolvedValue(null as never);
+      // Research anchors only line 0. The model localizes it there (correct) but
+      // also propagates the same note onto the identical repeat at line 1 (the bug).
+      const output = buildOutput();
+      output.segments[0] = { ...output.segments[0]!, contextNote: "Sobre a cidade" };
+      output.segments[1] = { ...output.segments[1]!, contextNote: "Sobre a cidade" };
+      generateTextMock.mockResolvedValue({ output });
+      vi.mocked(prisma.translation.create).mockResolvedValue(
+        (await buildExistingTranslation()) as never,
+      );
+
+      await callGenerate({ research: researchWithAnchor(0) });
+
+      const createCall = vi.mocked(prisma.translation.create).mock.calls[0]?.[0];
+      const segments = createCall?.data.segments as Array<{
+        contextNote: string | null;
+        index: number;
+      }>;
+      // Anchored line keeps its note; the stray note on the unanchored repeat is nulled.
+      expect(segments.find((s) => s.index === 0)?.contextNote).toBe("Sobre a cidade");
+      expect(segments.find((s) => s.index === 1)?.contextNote).toBeNull();
+      // The anchored line had its note, so no drift warning fires.
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
     });
   });
 
@@ -430,6 +651,45 @@ describe("TranslationService", () => {
         code: "TRANSLATION_FETCH_ERROR",
         statusCode: 500,
       });
+    });
+  });
+
+  describe("resolveScope", () => {
+    it("returns skip when the only language is intelligible with the target", () => {
+      const lyrics = { ...baseLyrics, secondaryLanguages: null } as unknown as Lyrics;
+      expect(service.resolveScope(lyrics, "en-GB")).toEqual({ kind: "skip" });
+    });
+
+    it("returns full when the primary language differs from the target", () => {
+      const lyrics = { ...baseLyrics, secondaryLanguages: null } as unknown as Lyrics;
+      expect(service.resolveScope(lyrics, "pt-BR")).toEqual({ kind: "full" });
+    });
+
+    it("returns partial with the foreign line indices read from secondaryLanguages", () => {
+      const lyrics = {
+        ...baseLyrics,
+        secondaryLanguages: [{ language: "fr-FR", lineIndices: [3] }],
+      } as unknown as Lyrics;
+
+      expect(service.resolveScope(lyrics, "en-US")).toEqual({ kind: "partial", lineIndices: [3] });
+    });
+  });
+
+  describe("isCurrent", () => {
+    it("returns true when provenance matches", async () => {
+      const existing = await buildExistingTranslation();
+      expect(await service.isCurrent(existing as never, baseLyrics, baseResearch)).toBe(true);
+    });
+
+    it("returns false when the prompt version is stale", async () => {
+      const existing = { ...(await buildExistingTranslation()), promptVersion: "translation-v0" };
+      expect(await service.isCurrent(existing as never, baseLyrics, baseResearch)).toBe(false);
+    });
+
+    it("returns false when the source language is unknown", async () => {
+      const existing = await buildExistingTranslation();
+      const lyrics = { ...baseLyrics, language: null } as Lyrics;
+      expect(await service.isCurrent(existing as never, lyrics, baseResearch)).toBe(false);
     });
   });
 

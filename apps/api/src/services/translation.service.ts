@@ -5,10 +5,12 @@ import { Output, generateText } from "ai";
 
 import { describeAiError } from "@/lib/ai-errors";
 import {
-  areLanguageTagsMutuallyIntelligible,
   canonicalizeLanguageTag,
+  getBaseLanguage,
   isRegionSpecificLanguageTag,
+  resolveTranslationScope,
 } from "@/lib/language";
+import type { SecondaryLanguage, TranslationScope } from "@/lib/language";
 import { logger } from "@/lib/logger";
 import { computeResearchVersion } from "@/lib/version";
 import { AppError, isPrismaKnownError } from "@/middleware/error-handler";
@@ -17,6 +19,7 @@ import {
   PROMPT_VERSION,
   SYSTEM_PROMPT,
   buildUserPrompt,
+  researchNotesForPromptSchema,
   translationOutputSchema,
 } from "@/services/translation.prompt";
 import type { ResearchNotesForPrompt, TranslationOutput } from "@/services/translation.prompt";
@@ -30,14 +33,69 @@ type TranslationTrackInput = {
 type GenerateTranslationInput = {
   lyrics: Lyrics;
   research: LyricsResearch;
+  scope?: TranslationScope;
   targetLanguage: string;
   track: TranslationTrackInput;
   trackContext?: string | null;
 };
 
+const collectAnchoredLineIndices = (
+  notes: ResearchNotesForPrompt,
+  lineCount: number,
+): Set<number> => {
+  const anchored = new Set<number>();
+  const items = [...(notes.references ?? []), ...(notes.idioms ?? []), ...(notes.wordplay ?? [])];
+
+  for (const item of items) {
+    const index = item.lineIndex;
+
+    if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < lineCount) {
+      anchored.add(index);
+    }
+  }
+
+  return anchored;
+};
+
+const isTranslationRowCurrent = (
+  existing: Translation,
+  expected: {
+    modelId: string;
+    promptVersion: string;
+    researchVersion: string;
+    sourceContentHash: string | null;
+    sourceLanguageBase: string;
+  },
+): boolean =>
+  existing.modelId === expected.modelId &&
+  existing.promptVersion === expected.promptVersion &&
+  existing.sourceContentHash === expected.sourceContentHash &&
+  existing.researchVersion === expected.researchVersion &&
+  (existing.sourceLanguageBase === null ||
+    existing.sourceLanguageBase === expected.sourceLanguageBase);
+
 export class TranslationService {
-  isLanguagePairRedundant(source: string, target: string): boolean {
-    return areLanguageTagsMutuallyIntelligible(source, target);
+  resolveScope(lyrics: Lyrics, target: string): TranslationScope {
+    const secondary = (lyrics.secondaryLanguages as Array<SecondaryLanguage> | null) ?? [];
+    return resolveTranslationScope(lyrics.language ?? "", secondary, target);
+  }
+
+  async isCurrent(
+    existing: Translation,
+    lyrics: Lyrics,
+    research: LyricsResearch,
+  ): Promise<boolean> {
+    if (!lyrics.language) {
+      return false;
+    }
+
+    return isTranslationRowCurrent(existing, {
+      modelId: MODEL_ID,
+      promptVersion: PROMPT_VERSION,
+      researchVersion: await computeResearchVersion(research),
+      sourceContentHash: lyrics.contentHash,
+      sourceLanguageBase: getBaseLanguage(lyrics.language),
+    });
   }
 
   async findByTrackAndLanguage(trackId: string, language: string): Promise<Translation | null> {
@@ -56,6 +114,7 @@ export class TranslationService {
   async generate({
     lyrics,
     research,
+    scope = { kind: "full" },
     targetLanguage,
     track,
     trackContext = null,
@@ -100,6 +159,7 @@ export class TranslationService {
     const canonicalTarget = canonicalizeLanguageTag(targetLanguage);
 
     const sourceContentHash = lyrics.contentHash;
+    const sourceLanguageBase = getBaseLanguage(lyrics.language);
     const researchVersion = await computeResearchVersion(research);
 
     const sourceLineCount = lyrics.plainLyrics.split("\n").length;
@@ -109,11 +169,14 @@ export class TranslationService {
     });
 
     const isCurrent =
-      existing &&
-      existing.modelId === MODEL_ID &&
-      existing.promptVersion === PROMPT_VERSION &&
-      existing.sourceContentHash === sourceContentHash &&
-      existing.researchVersion === researchVersion;
+      existing !== null &&
+      isTranslationRowCurrent(existing, {
+        modelId: MODEL_ID,
+        promptVersion: PROMPT_VERSION,
+        researchVersion,
+        sourceContentHash,
+        sourceLanguageBase,
+      });
 
     if (isCurrent) {
       logger.info(
@@ -123,23 +186,52 @@ export class TranslationService {
       return existing;
     }
 
+    const parsedNotes = researchNotesForPromptSchema.safeParse(research.notes);
+
+    if (!parsedNotes.success) {
+      logger.error(
+        { error: parsedNotes.error, language: canonicalTarget, lyricsId: lyrics.id },
+        "Stored research notes failed validation; refusing to translate without grounding",
+      );
+      throw new AppError(
+        "Stored research notes are malformed",
+        500,
+        false,
+        "RESEARCH_NOTES_INVALID",
+      );
+    }
+
+    const researchNotes = parsedNotes.data;
+
+    const { cachedPrefix, variableSuffix } = buildUserPrompt({
+      lyrics: { plainLyrics: lyrics.plainLyrics },
+      research: {
+        notes: researchNotes,
+        summary: research.summary,
+      },
+      scope,
+      sourceLanguage: canonicalSource,
+      targetLanguage: canonicalTarget,
+      track,
+      trackContext,
+    });
+
     let output: TranslationOutput;
 
     try {
       const result = await generateText({
         messages: [
           {
-            content: buildUserPrompt({
-              lyrics: { plainLyrics: lyrics.plainLyrics },
-              research: {
-                notes: research.notes as ResearchNotesForPrompt,
-                summary: research.summary,
+            content: [
+              {
+                providerOptions: {
+                  anthropic: { cacheControl: { ttl: "1h", type: "ephemeral" } },
+                },
+                text: cachedPrefix,
+                type: "text",
               },
-              sourceLanguage: canonicalSource,
-              targetLanguage: canonicalTarget,
-              track,
-              trackContext,
-            }),
+              { text: variableSuffix, type: "text" },
+            ],
             role: "user",
           },
         ],
@@ -221,6 +313,36 @@ export class TranslationService {
       );
     }
 
+    const foreignLineIndices = new Set(scope.kind === "partial" ? scope.lineIndices : []);
+
+    const anchoredLineIndices = collectAnchoredLineIndices(researchNotes, sourceLineCount);
+
+    const segments = output.segments.map((segment) => {
+      const translated =
+        scope.kind === "partial" && !foreignLineIndices.has(segment.index)
+          ? null
+          : segment.translated;
+      const contextNote = anchoredLineIndices.has(segment.index) ? segment.contextNote : null;
+
+      return { ...segment, contextNote, translated };
+    });
+
+    const missingContextNotes = [...anchoredLineIndices].filter(
+      (index) => !segments[index]?.contextNote,
+    );
+
+    if (missingContextNotes.length > 0) {
+      logger.warn(
+        {
+          anchoredLineIndices: [...anchoredLineIndices],
+          language: canonicalTarget,
+          lyricsId: lyrics.id,
+          missingContextNotes,
+        },
+        "Translation context-note drift: research-anchored lines missing contextNote",
+      );
+    }
+
     const generatedAt = new Date();
     const data = {
       downvotes: 0,
@@ -228,9 +350,10 @@ export class TranslationService {
       modelId: MODEL_ID,
       promptVersion: PROMPT_VERSION,
       researchVersion,
-      segments: output.segments as unknown as Prisma.InputJsonValue,
+      segments,
       selfScore: output.selfScore,
       sourceContentHash,
+      sourceLanguageBase,
       status: "FRESH",
       translatorNote: output.translatorNote,
       upvotes: 0,
